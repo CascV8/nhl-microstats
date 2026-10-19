@@ -12,3 +12,11 @@ wheels/
 data/
 collect.log
 .pytest_cache/
+
+# generated website
+site/
+site.tmp/
+site.old/
+# generated cards
+cards.html
+*_card.html

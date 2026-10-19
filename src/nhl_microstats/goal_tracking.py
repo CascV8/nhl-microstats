@@ -14,6 +14,8 @@ Per player, from the scoring team's side of each goal:
   gt_defenders_beaten  opposing skaters who were ahead of the carrier, close to
                        him, and behind him by the time he gave up the puck
   gt_dekes             the puck swung across the carrier's body with an opponent close
+and from the conceding side:
+  gt_beaten            times he was one of those beaten defenders (fewer is better)
 (Passes are left out: primary assists and their xG already cover them.)
 """
 
@@ -58,6 +60,7 @@ STATS = {
     "gt_carries":          ("Zone carries on goals", True, True),
     "gt_defenders_beaten": ("Defenders beaten on goals", True, True),
     "gt_dekes":            ("Dekes on goals", True, True),
+    "gt_beaten":           ("Beaten on goals against", True, False),
 }
 
 
@@ -245,6 +248,7 @@ def goal_stats(goal: pd.DataFrame, scorer_team: str, skaters: set[int]) -> tuple
                 continue
             if dx[a] > cx[a] and dx[b] < cx[b]:   # ahead of the carrier, then behind him
                 add(p, "gt_defenders_beaten")
+                add(d, "gt_beaten")
         if b - a + 1 >= DEKE_MIN_POSSESSION and opp_x.shape[1]:
             near = np.hypot(opp_x[a:b + 1] - cx[a:b + 1, None], opp_y[a:b + 1] - cy[a:b + 1, None])
             pressured = (np.nan_to_num(near, nan=np.inf) <= CONTEST).any(axis=1)

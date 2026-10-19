@@ -15,6 +15,10 @@ sequence of recorded events in the period)
          from a forecheck recovery.
 Both use only event timing, so blocked attempts are classified too.
 
+High danger: an unblocked attempt from the inner slot (within 25 ft of the net
+and 10 ft of the middle), a rebound, or a quick shot off a rush (both as the
+xG model defines them).
+
 On-ice for/against comes from matching each event's period and clock to the
 shift charts. Faceoffs count players starting a shift; other events count
 players whose shift covers the second the event happened.
@@ -40,6 +44,7 @@ RUSH_SECONDS = 8
 REBOUND_SECONDS = 3
 CYCLE_SECONDS = 10
 FIVE_ON_FIVE = "1551"
+SLOT_DISTANCE, SLOT_WIDTH = 25, 10   # feet
 
 
 # --------------------------------------------------------------------------
@@ -72,11 +77,13 @@ def _zone_clocks(pbp: pd.DataFrame, shots: pd.DataFrame) -> pd.DataFrame:
 
 
 def score_shots(pbp: pd.DataFrame) -> pd.DataFrame:
-    """Unblocked shots with xG from xg-model."""
+    """Unblocked shots with xG from xg-model, and whether each was high danger."""
     bundle = load_model()
     shots = build_shots(pbp[list(KEEP)])
     shots["xg"] = bundle["model"].predict_proba(shots[bundle["features"]])[:, 1]
-    return shots[["game_id", "event_id", "xg"]]
+    slot = (shots["distance"] <= SLOT_DISTANCE) & (shots["y_abs"] <= SLOT_WIDTH)
+    shots["hd"] = (slot | (shots["rebound"] == 1) | (shots["rush"] == 1)).astype(int)
+    return shots[["game_id", "event_id", "xg", "hd"]]
 
 
 def classify(pbp: pd.DataFrame, ev: pd.DataFrame) -> pd.DataFrame:
@@ -98,6 +105,7 @@ def attempts(pbp: pd.DataFrame, shots: pd.DataFrame, team_of: pd.Series) -> pd.D
     ev["team"] = ev["team"].fillna(ev["event_team"].where(ev["event_type"] != "blocked-shot"))
     ev = ev.dropna(subset=["team"]).merge(shots, on=["game_id", "event_id"], how="left")
     ev["xg"] = ev["xg"].fillna(0)
+    ev["hd_xg"] = ev["xg"] * ev["hd"].fillna(0)
     ev["is_home"] = (ev["team"] == ev["home_team"]).astype(int)
     ev[["rush", "cycle"]] = classify(pbp, ev)
     ev["is_goal"] = (ev["event_type"] == "goal").astype(int)
@@ -111,29 +119,78 @@ def attempts(pbp: pd.DataFrame, shots: pd.DataFrame, team_of: pd.Series) -> pd.D
 # Time on ice and on-ice events
 # --------------------------------------------------------------------------
 
-def toi(shifts: pd.DataFrame, skaters: set[int]) -> pd.DataFrame:
+def toi(shifts: pd.DataFrame, skaters: set[int], by_game: pd.DataFrame | None = None) -> pd.DataFrame:
     """All-situations and 5v5 TOI (seconds) and games played per skater."""
+    t = toi_by_game(shifts, skaters) if by_game is None else by_game
+    return t.groupby("player_id").agg(gp=("game_id", "nunique"), toi_all=("toi_all", "sum"), toi_5v5=("toi_5v5", "sum"))
+
+
+def _five_on_five(s: pd.DataFrame, skaters: set[int]) -> np.ndarray:
+    """For one game-period's shifts: which seconds have five skaters and a goalie a side."""
+    n = int(s["end_seconds"].max()) + 1
+    is_skater = s["player_id"].isin(skaters).to_numpy()
+    teams = s["team_abbrev"].to_numpy()
+    start, end = s["start_seconds"].to_numpy(), s["end_seconds"].to_numpy()
+    five = np.ones(n - 1, dtype=bool)
+    for team in np.unique(teams):
+        for want, mask in ((5, is_skater), (1, ~is_skater)):
+            d = np.zeros(n, dtype=int)
+            sel = (teams == team) & mask
+            np.add.at(d, start[sel], 1)
+            np.add.at(d, end[sel], -1)
+            five &= np.cumsum(d)[:-1] == want
+    return five
+
+
+def toi_by_game(shifts: pd.DataFrame, skaters: set[int]) -> pd.DataFrame:
+    """Per-shift TOI rows: game, player, team, all-situations and 5v5 seconds."""
     rows = []
     shifts = shifts[shifts["end_seconds"] > shifts["start_seconds"]]
     for (gid, period), s in shifts.groupby(["game_id", "period"], sort=False):
-        n = int(s["end_seconds"].max()) + 1
-        is_skater = s["player_id"].isin(skaters).to_numpy()
         teams = s["team_abbrev"].to_numpy()
         start, end = s["start_seconds"].to_numpy(), s["end_seconds"].to_numpy()
-        five = np.ones(n - 1, dtype=bool)
-        for team in np.unique(teams):
-            for want, mask in ((5, is_skater), (1, ~is_skater)):
-                d = np.zeros(n, dtype=int)
-                sel = (teams == team) & mask
-                np.add.at(d, start[sel], 1)
-                np.add.at(d, end[sel], -1)
-                five &= np.cumsum(d)[:-1] == want
-        cum = np.concatenate([[0], np.cumsum(five)])
-        rows.append(pd.DataFrame({"game_id": gid, "player_id": s["player_id"].to_numpy(),
+        cum = np.concatenate([[0], np.cumsum(_five_on_five(s, skaters))])
+        rows.append(pd.DataFrame({"game_id": gid, "player_id": s["player_id"].to_numpy(), "team": teams,
                                   "toi_all": end - start, "toi_5v5": cum[end] - cum[start]}))
     t = pd.concat(rows, ignore_index=True)
-    t = t[t["player_id"].isin(skaters)]
-    return t.groupby("player_id").agg(gp=("game_id", "nunique"), toi_all=("toi_all", "sum"), toi_5v5=("toi_5v5", "sum"))
+    return t[t["player_id"].isin(skaters)]
+
+
+# Opponents' xGF% is shrunk toward a prior (last season's xGF%, else 50%) by this much
+# xG for and against, so a player with a few minutes doesn't count as an elite or
+# terrible opponent, and early in a season opponents are rated mostly on last season.
+QOC_PRIOR_XG = 4.0
+
+
+def competition(shifts: pd.DataFrame, skaters: set[int], xgf: pd.Series, xga: pd.Series,
+                prior: pd.Series | None = None) -> pd.Series:
+    """Quality of competition: the 5v5 xGF% of the opposing skaters a player was on
+    the ice against, weighted by the 5v5 seconds they shared. ``xgf``/``xga`` are
+    each skater's on-ice 5v5 season totals; ``prior`` is a starting xGF% (0-100)
+    per skater, 50 where missing."""
+    ids = xgf.index.union(xga.index)
+    xgf, xga = xgf.reindex(ids).fillna(0), xga.reindex(ids).fillna(0)
+    p = (prior.reindex(ids) if prior is not None else pd.Series(np.nan, index=ids)).fillna(50) / 100
+    share = 100 * (xgf + 2 * QOC_PRIOR_XG * p) / (xgf + xga + 2 * QOC_PRIOR_XG)
+    num, den = [], []
+    shifts = shifts[shifts["end_seconds"] > shifts["start_seconds"]]
+    for _, s in shifts.groupby(["game_id", "period"], sort=False):
+        five = _five_on_five(s, skaters)
+        sk = s[s["player_id"].isin(skaters)]
+        ids, idx = np.unique(sk["player_id"].to_numpy(), return_inverse=True)
+        d = np.zeros((len(ids), len(five) + 1))
+        np.add.at(d, (idx, sk["start_seconds"].to_numpy()), 1)
+        np.add.at(d, (idx, sk["end_seconds"].to_numpy()), -1)
+        on = (np.cumsum(d, axis=1)[:, :-1] > 0) & five
+        team = sk.drop_duplicates("player_id").set_index("player_id")["team_abbrev"].reindex(ids).to_numpy()
+        opp_share = share.reindex(ids).fillna(50).to_numpy()
+        for t in np.unique(team):
+            me, them = team == t, team != t
+            shared = on[me].astype(float) @ on[them].T.astype(float)     # seconds together, me x them
+            num.append(pd.Series(shared @ opp_share[them], index=ids[me]))
+            den.append(pd.Series(shared.sum(axis=1), index=ids[me]))
+    num, den = pd.concat(num).groupby(level=0).sum(), pd.concat(den).groupby(level=0).sum()
+    return (num / den)[den > 0].rename("qoc_xgf_pct")
 
 
 def on_ice(events: pd.DataFrame, shifts: pd.DataFrame) -> pd.DataFrame:
@@ -163,6 +220,7 @@ def _individual(ev: pd.DataFrame, goals_xg: pd.DataFrame) -> pd.DataFrame:
         "goals": by["is_goal"].sum(),
         "ixg": by["xg"].sum(),
         "shot_attempts": by.size(),
+        "fenwick": by["unblocked"].sum(),
         "shots_on_goal": by["sog"].sum(),
         "rush_shots": by["rush"].sum(),
         "cycle_shots": by["cycle"].sum(),
@@ -177,23 +235,132 @@ def _individual(ev: pd.DataFrame, goals_xg: pd.DataFrame) -> pd.DataFrame:
 
 
 def _zone_puck_events(pbp: pd.DataFrame) -> pd.DataFrame:
-    """Takeaways and giveaways in the player's offensive and defensive zones.
+    """Takeaways and giveaways in all zones, and in the player's offensive and defensive zones.
     zone_code is relative to the team that owns the event, i.e. the player's team."""
-    ev = pbp[pbp["event_type"].isin(["takeaway", "giveaway"]) & pbp["zone_code"].isin(["O", "D"])
-             & pbp["player_id"].notna()]
-    out = (ev.groupby(["player_id", ev["zone_code"].str.lower() + "z_" + ev["event_type"] + "s"])
-           .size().unstack(fill_value=0))
+    ev = pbp[pbp["event_type"].isin(["takeaway", "giveaway"]) & pbp["player_id"].notna()]
+    total = ev.groupby(["player_id", ev["event_type"] + "s"]).size().unstack(fill_value=0)
+    ev = ev[ev["zone_code"].isin(["O", "D"])]
+    zones = (ev.groupby(["player_id", ev["zone_code"].str.lower() + "z_" + ev["event_type"] + "s"])
+             .size().unstack(fill_value=0))
+    out = total.join(zones, how="outer").fillna(0)
     out.index = out.index.astype("int64")
-    return out.reindex(columns=["oz_takeaways", "dz_takeaways", "oz_giveaways", "dz_giveaways"], fill_value=0)
+    return out.reindex(columns=["takeaways", "giveaways", "oz_takeaways", "dz_takeaways", "oz_giveaways", "dz_giveaways"],
+                       fill_value=0)
+
+
+GIVEAWAY_SECONDS = 10
+
+
+def _giveaway_xga(pbp: pd.DataFrame, shots: pd.DataFrame) -> dict[str, pd.Series]:
+    """xG of the opponent's unblocked shots in the 10 s after each of a player's giveaways
+    (same period, no faceoff in between), by the strength the giveaway happened at."""
+    p = pbp.merge(shots[["game_id", "event_id", "xg"]], on=["game_id", "event_id"], how="left")
+    p = p.sort_values(["game_id", "sort_order"])
+    pid_all, xga_all, is_five = [], [], []
+    for _, d in p.groupby(["game_id", "period"], sort=False):
+        typ = d["event_type"].to_numpy()
+        gv = np.flatnonzero((typ == "giveaway") & d["player_id"].notna().to_numpy())
+        if not len(gv):
+            continue
+        t, team = d["period_seconds"].to_numpy(), d["event_team"].fillna("").astype(object).to_numpy()
+        xg, pid = d["xg"].to_numpy(dtype=float), d["player_id"].to_numpy()
+        f = (d["situation_code"].astype(str).str.zfill(4) == FIVE_ON_FIVE).to_numpy()
+        for n in gv:
+            s = 0.0
+            for j in range(n + 1, len(d)):
+                if t[j] - t[n] > GIVEAWAY_SECONDS or typ[j] == "faceoff":
+                    break
+                if team[j] != team[n] and xg[j] == xg[j]:   # the opponent's unblocked shot (xg not NaN)
+                    s += xg[j]
+            pid_all.append(int(pid[n])); xga_all.append(s); is_five.append(bool(f[n]))
+    g = pd.DataFrame({"player_id": pid_all, "xga": xga_all, "five": is_five})
+    return {"all": g.groupby("player_id")["xga"].sum().rename("giveaway_xga"),
+            "5v5": g[g["five"]].groupby("player_id")["xga"].sum().rename("giveaway_xga")}
+
+
+def _blocks_hits(pbp: pd.DataFrame) -> pd.DataFrame:
+    """Shots blocked, hits thrown and hits taken, per player."""
+    hits = pbp[pbp["event_type"] == "hit"]
+    out = pd.concat({"blocks": pbp.loc[pbp["event_type"] == "blocked-shot", "blocking_player_id"].value_counts(),
+                     "hits": hits["hitting_player_id"].value_counts(),
+                     "hits_taken": hits["hittee_player_id"].value_counts()}, axis=1)
+    out.index = out.index.astype("int64")
+    return out.fillna(0)
+
+
+def _penalties(pbp: pd.DataFrame) -> pd.DataFrame:
+    """Minor and major penalties taken and drawn, per player. Fighting majors are
+    left out (both players get one) and counted as fights; misconducts are left out (no power play)."""
+    pen = pbp[(pbp["event_type"] == "penalty") & pbp["details_type_code"].isin(["MIN", "MAJ"])
+              & ~pbp["desc_key"].fillna("").str.startswith("fighting")]
+    fights = pbp[(pbp["event_type"] == "penalty") & pbp["desc_key"].fillna("").str.startswith("fighting")]
+    out = pd.concat({"penalties_taken": pen["committed_by_player_id"].value_counts(),
+                     "penalties_drawn": pen["drawn_by_player_id"].value_counts(),
+                     "fights": fights["committed_by_player_id"].value_counts()}, axis=1)
+    out.index = out.index.astype("int64")
+    return out.fillna(0)
 
 
 def _onice_stats(ev: pd.DataFrame, pairs: pd.DataFrame) -> pd.DataFrame:
-    p = pairs.join(ev[["xg", "is_goal", "rush", "cycle"]], on="ev")
+    p = pairs.join(ev[["xg", "hd_xg", "is_goal", "rush", "cycle", "unblocked"]], on="ev")
     p["shots"] = 1
-    agg = p.groupby(["player_id", "side"])[["shots", "xg", "is_goal", "rush", "cycle"]].sum().unstack("side", fill_value=0)
-    names = {"shots": "shots", "xg": "xg", "is_goal": "goals", "rush": "rush_shots", "cycle": "cycle_shots"}
+    cols = ["shots", "unblocked", "xg", "hd_xg", "is_goal", "rush", "cycle"]
+    agg = p.groupby(["player_id", "side"])[cols].sum().unstack("side", fill_value=0)
+    names = {"shots": "shots", "unblocked": "fenwick", "xg": "xg", "hd_xg": "hd_xg", "is_goal": "goals", "rush": "rush_shots", "cycle": "cycle_shots"}
     agg.columns = [f"{names[stat]}_{side}" for stat, side in agg.columns]
-    return agg.rename(columns={"xg_for": "xgf", "xg_against": "xga"})
+    agg = agg.rename(columns={"xg_for": "xgf", "xg_against": "xga", "hd_xg_against": "hd_xga"})
+    return agg.drop(columns="hd_xg_for", errors="ignore")
+
+
+def _on_off_ga(goals: pd.DataFrame, by_game: pd.DataFrame, shifts: pd.DataFrame, strength: str,
+               on_ga: pd.Series, name: str = "ga_on_off_pct") -> pd.Series:
+    """Goals against per 60 with the player on the ice, as a % of his team's goals against
+    per 60 with him off the ice, in the games he played (100 = no different, lower is better).
+    ``goals`` are this strength's goals; ``on_ga`` each player's on-ice goals against. Any
+    other event against works the same way (unblocked attempts for Fenwick against)."""
+    secs = "toi_5v5" if strength == "5v5" else "toi_all"
+    mine = by_game.groupby(["game_id", "team", "player_id"])[secs].sum().reset_index()
+    if strength == "5v5":   # five skaters a side at 5v5, so team time is skater time / 5
+        team_secs = mine.groupby(["game_id", "team"])[secs].sum() / 5
+    else:                   # game length, from the last shift of each period
+        length = shifts.groupby(["game_id", "period"])["end_seconds"].max().groupby("game_id").sum()
+        team_secs = mine[["game_id", "team"]].drop_duplicates().set_index(["game_id", "team"])
+        team_secs = team_secs.join(length.rename("s"), on="game_id")["s"]
+    opp = goals["home_team"].where(goals["team"] != goals["home_team"], goals["away_team"])
+    team_ga = goals.groupby([goals["game_id"], opp.rename("team")]).size()
+    m = mine.join(team_secs.rename("team_secs"), on=["game_id", "team"]).join(team_ga.rename("team_ga"), on=["game_id", "team"])
+    tot = m.fillna({"team_ga": 0}).groupby("player_id")[[secs, "team_secs", "team_ga"]].sum()
+    on = on_ga.reindex(tot.index).fillna(0)
+    off_ga, off_secs = tot["team_ga"] - on, tot["team_secs"] - tot[secs]
+    ratio = 100 * (on / tot[secs]) / (off_ga / off_secs)
+    return ratio[(tot[secs] > 0) & (off_ga > 0) & (off_secs > 0)].rename(name)
+
+
+def _xgf_pct_rel(ev: pd.DataFrame, by_game: pd.DataFrame, on_xgf: pd.Series, on_xga: pd.Series) -> pd.Series:
+    """His on-ice xGF% minus his team's xGF% with him off the ice, in the games he played
+    (percentage points; higher is better). ``ev`` are this strength's attempts."""
+    opp = ev["home_team"].where(ev["team"] != ev["home_team"], ev["away_team"])
+    team = pd.DataFrame({"xgf": ev.groupby(["game_id", "team"])["xg"].sum(),
+                         "xga": ev.groupby([ev["game_id"], opp.rename("team")])["xg"].sum()}).fillna(0)
+    games = by_game[["game_id", "team", "player_id"]].drop_duplicates()
+    tot = games.join(team, on=["game_id", "team"]).fillna({"xgf": 0, "xga": 0}).groupby("player_id")[["xgf", "xga"]].sum()
+    f, a = on_xgf.reindex(tot.index).fillna(0), on_xga.reindex(tot.index).fillna(0)
+    off_f, off_a = tot["xgf"] - f, tot["xga"] - a
+    rel = 100 * (f / (f + a) - off_f / (off_f + off_a))
+    return rel[(f + a > 0) & (off_f + off_a > 0)].rename("xgf_pct_rel")
+
+
+def _last_season_xgf_share(y: int) -> pd.Series | None:
+    """Each skater's 5v5 xGF% the season before ``y``, if it's in the database."""
+    if not db.DB_PATH.exists():
+        return None
+    with db.connect() as con:
+        d = pd.read_sql("SELECT player_id, stat, value FROM stats WHERE season = ? AND strength = '5v5' "
+                        "AND stat IN ('xgf', 'xga')", con, params=[y - 1])
+    if d.empty:
+        return None
+    d = d.pivot(index="player_id", columns="stat", values="value")
+    return (100 * d["xgf"] / (d["xgf"] + d["xga"])).dropna()
 
 
 def build_season(season) -> None:
@@ -218,24 +385,46 @@ def build_season(season) -> None:
     log.info("%d-%02d: %d attempts, %d unblocked scored", y, (y + 1) % 100, len(ev), len(shots))
 
     goals = ev[ev["is_goal"] == 1]
-    times = toi(shifts, skaters)
+    by_game = toi_by_game(shifts, skaters)
+    times = toi(shifts, skaters, by_game)
     pairs = on_ice(ev, shifts)
     pairs = pairs[pairs["player_id"].isin(skaters)]
 
+    gv_xga = _giveaway_xga(pbp, shots)
     frames = []
     pbp_5v5 = pbp["situation_code"].astype(str).str.zfill(4) == FIVE_ON_FIVE
     for strength, mask in (("all", slice(None)), ("5v5", ev["is_5v5"])):
         e = ev[mask] if strength == "5v5" else ev
         g = goals[goals["is_5v5"]] if strength == "5v5" else goals
         p = pairs[pairs["ev"].isin(e.index)]
-        puck = _zone_puck_events(pbp[pbp_5v5] if strength == "5v5" else pbp)
-        stats = _individual(e, g).join(_onice_stats(e, p), how="outer").join(puck, how="outer").fillna(0)
+        pb = pbp[pbp_5v5] if strength == "5v5" else pbp
+        stats = (_individual(e, g).join(_onice_stats(e, p), how="outer").join(_zone_puck_events(pb), how="outer")
+                 .join(_blocks_hits(pb), how="outer").join(_penalties(pb), how="outer").fillna(0))
         stats = stats[stats.index.isin(times.index)]
+        stats = stats.join(gv_xga[strength]).fillna({"giveaway_xga": 0})
+        stats = stats.join(_on_off_ga(g, by_game, shifts, strength, stats["goals_against"]))
+        if strength == "5v5":   # in all situations these mostly measure power-play vs penalty-kill time
+            stats = stats.join(_xgf_pct_rel(e, by_game, stats["xgf"], stats["xga"]))
+            stats = stats.join(_on_off_ga(e[e["unblocked"] == 1], by_game, shifts, strength,
+                                          stats["fenwick_against"], "fa_on_off_pct"))
         # Goals per shot on goal; players without a shot on goal have no shooting %.
         stats["shooting_pct"] = 100 * stats["goals"] / stats["shots_on_goal"].where(stats["shots_on_goal"] > 0)
+        # On-ice shares: his team's share of unblocked attempts (Fenwick %) and of xG while he's on the ice.
+        ff = stats["fenwick_for"] + stats["fenwick_against"]
+        stats["fenwick_pct"] = 100 * stats["fenwick_for"] / ff.where(ff > 0)
+        xg = stats["xgf"] + stats["xga"]
+        stats["xgf_pct"] = 100 * stats["xgf"] / xg.where(xg > 0)
+        # Share of the opponents' shot attempts with him on the ice that he blocked.
+        stats["block_share"] = 100 * stats["blocks"] / stats["shots_against"].where(stats["shots_against"] > 0)
+        # Takeaways per giveaway; players without a giveaway have none.
+        stats["take_give_ratio"] = stats["takeaways"] / stats["giveaways"].where(stats["giveaways"] > 0)
         long = stats.rename_axis("player_id").reset_index().melt("player_id", var_name="stat").dropna(subset=["value"])
         frames.append(long.assign(season=y, strength=strength))
     stats = pd.concat(frames, ignore_index=True)
+    five = stats[(stats["strength"] == "5v5")].pivot(index="player_id", columns="stat", values="value")
+    qoc = competition(shifts, skaters, five["xgf"], five["xga"], _last_season_xgf_share(y))
+    stats = pd.concat([stats, pd.DataFrame({"player_id": qoc.index.astype("int64"), "stat": qoc.name, "value": qoc.to_numpy(),
+                                            "season": y, "strength": "5v5"})], ignore_index=True)
 
     # Team: every team the player suited up for that season, most games first.
     teams = (shifts.drop_duplicates(["game_id", "player_id"]).groupby("player_id")["team_abbrev"]

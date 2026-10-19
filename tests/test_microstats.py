@@ -106,6 +106,22 @@ def test_percentile_end_to_end(tmp_path, monkeypatch):
     assert t.loc["rush_shots_for", "percentile"] > 90
     assert t.loc["rush_shots_for", "percentile"] > percentile.player_table("P98", 2025).set_index("stat").loc["rush_shots_for", "percentile"]
 
+    # The website's batch version gives every player the same numbers as player_table.
+    batch = percentile.season_table(2025).set_index(["player_id", "stat"])
+    for pid in (3, 60, 99):
+        one = percentile.player_table(pid, 2025).set_index("stat")
+        for stat in one.index:
+            assert batch.loc[(pid, stat), "value"] == pytest.approx(one.loc[stat, "value"])
+            assert batch.loc[(pid, stat), "percentile"] == pytest.approx(one.loc[stat, "percentile"])
+
+
+def test_current_season_starts_in_september():
+    import datetime as dt
+    from nhl_microstats.update import current_season
+    assert current_season(dt.date(2026, 10, 18)) == 2026
+    assert current_season(dt.date(2027, 4, 2)) == 2026
+    assert current_season(dt.date(2027, 9, 1)) == 2027
+
 
 def test_zone_takeaways_and_giveaways():
     pbp = pd.DataFrame({
@@ -114,8 +130,11 @@ def test_zone_takeaways_and_giveaways():
         "player_id":  pd.array([1, 1, 2, 1, 1, 2], dtype="Int64"),
     })
     out = build._zone_puck_events(pbp)
-    assert out.loc[1].to_dict() == {"oz_takeaways": 1, "dz_takeaways": 1, "oz_giveaways": 1, "dz_giveaways": 0}
-    assert out.loc[2].to_dict() == {"oz_takeaways": 0, "dz_takeaways": 0, "oz_giveaways": 0, "dz_giveaways": 1}
+    # Totals count every zone, the neutral-zone takeaway too.
+    assert out.loc[1].to_dict() == {"takeaways": 3, "giveaways": 1,
+                                    "oz_takeaways": 1, "dz_takeaways": 1, "oz_giveaways": 1, "dz_giveaways": 0}
+    assert out.loc[2].to_dict() == {"takeaways": 0, "giveaways": 1,
+                                    "oz_takeaways": 0, "dz_takeaways": 0, "oz_giveaways": 0, "dz_giveaways": 1}
 
 
 
@@ -148,6 +167,7 @@ def test_goal_tracking_possessions():
     stats, segs = gt.goal_stats(goal, "HOM", skaters={1, 2, 3, 9})
     assert segs["player_id"].tolist() == [1, 2]                     # C's pickup after the goal is cut
     assert stats.loc[1, "gt_carries"] == 1 and stats.loc[1, "gt_defenders_beaten"] == 1
+    assert stats.loc[9, "gt_beaten"] == 1                           # the defender he skated past
     assert stats.loc[1, "gt_possession_time"] == pytest.approx(2.1, abs=0.2)
     assert 3 not in stats.index
 
@@ -164,3 +184,55 @@ def test_goal_tracking_dekes():
     assert gt._dekes(puck, carrier, ~pressured, 1.0) == 0                 # nobody close: just stickhandling
     small = carrier + np.column_stack([np.full(frames, 15.0), side / 2])  # a 20 in swing is too small
     assert gt._dekes(small, carrier, pressured, 1.0) == 0
+
+
+def test_blocks_and_hits():
+    pbp = pd.DataFrame({
+        "event_type": ["blocked-shot", "blocked-shot", "hit", "hit", "hit", "takeaway"],
+        "blocking_player_id": pd.array([4, 4, None, None, None, None], dtype="Int64"),
+        "hitting_player_id": pd.array([None, None, 4, 5, 5, None], dtype="Int64"),
+        "hittee_player_id": pd.array([None, None, 5, 4, 4, None], dtype="Int64"),
+    })
+    out = build._blocks_hits(pbp)
+    assert out.loc[4].to_dict() == {"blocks": 2, "hits": 1, "hits_taken": 2}
+    assert out.loc[5].to_dict() == {"blocks": 0, "hits": 2, "hits_taken": 1}
+
+
+def test_penalties_skip_fights_and_misconducts():
+    pbp = pd.DataFrame({
+        "event_type": ["penalty"] * 4 + ["hit"],
+        "details_type_code": ["MIN", "MAJ", "MAJ", "MIS", None],
+        "desc_key": ["tripping", "boarding", "fighting", "misconduct", None],
+        "committed_by_player_id": pd.array([4, 4, 4, 4, None], dtype="Int64"),
+        "drawn_by_player_id": pd.array([5, 5, 6, None, None], dtype="Int64"),
+    })
+    out = build._penalties(pbp)
+    assert out.loc[4].to_dict() == {"penalties_taken": 2, "penalties_drawn": 0, "fights": 1}
+    assert out.loc[5, "penalties_drawn"] == 2 and 6 not in out.index
+
+
+
+def test_quality_of_competition():
+    # 100 s period: HOM skaters 1-5 + goalie 90, AWY skaters 6-10 + goalie 91. Skater 10 leaves at 80 s,
+    # so the last 20 s are 5-on-4 and don't count.
+    rows = [(p, "HOM", 0, 100) for p in [1, 2, 3, 4, 5, 90]] + [(p, "AWY", 0, 100) for p in [6, 7, 8, 9, 91]]
+    rows.append((10, "AWY", 0, 80))
+    shifts = pd.DataFrame(rows, columns=["player_id", "team_abbrev", "start_seconds", "end_seconds"]).assign(game_id=1, period=1)
+    skaters = set(range(1, 11))
+    # Prior-free shares: 6 is a 70% player, everyone else 50%.
+    big = 1e9
+    xgf = pd.Series({p: big for p in skaters}) ; xga = pd.Series({p: big for p in skaters})
+    xgf[6], xga[6] = 0.7 * big, 0.3 * big
+    q = build.competition(shifts, skaters, xgf, xga)
+    assert q.loc[1] == pytest.approx(54, abs=0.01)          # five opponents for the same 80 s: (70 + 4 * 50) / 5
+    assert q.loc[6] == pytest.approx(50, abs=0.01)
+    assert 90 not in q.index                                # goalies aren't rated
+
+
+def test_quality_of_competition_prior():
+    # No xG yet this season: opponents are rated on the prior (last season), not 50%.
+    rows = [(p, "HOM", 0, 100) for p in [1, 2, 3, 4, 5, 90]] + [(p, "AWY", 0, 100) for p in [6, 7, 8, 9, 10, 91]]
+    shifts = pd.DataFrame(rows, columns=["player_id", "team_abbrev", "start_seconds", "end_seconds"]).assign(game_id=1, period=1)
+    zero = pd.Series(0.0, index=range(1, 11))
+    q = build.competition(shifts, set(range(1, 11)), zero, zero, prior=pd.Series({6: 60.0}))
+    assert q.loc[1] == pytest.approx(52)                    # (60 + 4 * 50) / 5

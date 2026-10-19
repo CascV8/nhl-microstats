@@ -1,0 +1,112 @@
+# Every 5 minutes: pull any game the NHL has marked official, rebuild the season and
+# deploy the site to Cloudflare Pages. Runs with nothing new take about a minute and
+# deploy nothing. See docs/website.md.
+#
+# Needs, once:
+#   secrets CLOUDFLARE_API_TOKEN (Pages: Edit) and CLOUDFLARE_ACCOUNT_ID
+#   a release tagged data-bootstrap with microstats.db and xg.joblib (used when the data cache is empty)
+#   optional repository variable PAGES_PROJECT (default nhl-microstats)
+
+name: Update site
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild and deploy even with nothing new
+        type: boolean
+        default: false
+
+concurrency:
+  group: update-site
+  cancel-in-progress: false
+
+permissions:
+  contents: write     # only for the keepalive commit below
+
+env:
+  PAGES_PROJECT: ${{ vars.PAGES_PROJECT || 'nhl-microstats' }}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nhl-microstats
+      - uses: actions/checkout@v4
+        with:
+          repository: CascV8/Puckscrape
+          path: puckscrape
+      - uses: actions/checkout@v4
+        with:
+          repository: CascV8/xG-model
+          path: xg-model
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: nhl-microstats/uv.lock
+
+      # The database, the season's cached games and the xG model, from the last run that saved them.
+      - name: Restore data
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            nhl-microstats/data
+            xg-model/models
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+
+      - name: Bootstrap data (first run, or the cache was evicted)
+        if: hashFiles('nhl-microstats/data/microstats.db') == '' || hashFiles('xg-model/models/xg.joblib') == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p nhl-microstats/data xg-model/models
+          gh release download data-bootstrap -R "$GITHUB_REPOSITORY" -p microstats.db -D nhl-microstats/data --clobber
+          gh release download data-bootstrap -R "$GITHUB_REPOSITORY" -p xg.joblib -D xg-model/models --clobber
+
+      - name: Note the update state
+        id: before
+        run: echo "state=${{ hashFiles('nhl-microstats/data/update_state.json') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Pull new games and rebuild
+        id: update
+        working-directory: nhl-microstats
+        run: uv run nhl-microstats update ${{ inputs.force && '--force' || '' }}
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.update.outputs.changed == 'true'
+        working-directory: nhl-microstats
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx --yes wrangler@4 pages project create "$PAGES_PROJECT" --production-branch=main 2>/dev/null || true
+          npx --yes wrangler@4 pages deploy site --project-name="$PAGES_PROJECT" --branch=main --commit-dirty=true
+
+      # Saved only after a successful deploy: if the deploy fails, the next run redoes the games and deploys them.
+      - name: Save data
+        if: success() && (steps.update.outputs.changed == 'true' || steps.before.outputs.state != hashFiles('nhl-microstats/data/update_state.json'))
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            nhl-microstats/data
+            xg-model/models
+          key: data-${{ github.run_id }}
+
+      # GitHub turns off scheduled workflows in a repo with no activity for 60 days.
+      - name: Keep the schedule alive
+        working-directory: nhl-microstats
+        run: |
+          days=$(( ($(date +%s) - $(git log -1 --format=%ct)) / 86400 ))
+          if [ "$days" -ge 45 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Keep scheduled site updates running"
+            git push
+          fi

@@ -25,6 +25,7 @@ STATS = {
     "goals":              ("Goals", "shooting", "pbp", True, True),
     "ixg":                ("xG (individual)", "shooting", "xg-model", True, True),
     "shot_attempts":      ("Shot attempts (individual)", "shooting", "pbp", True, True),
+    "fenwick":            ("Unblocked shot attempts (Fenwick)", "shooting", "pbp", True, True),
     "shots_on_goal":      ("Shots on goal", "shooting", "pbp", True, True),
     "rush_shots":         ("Rush shots (individual)", "shooting", "pbp", True, True),
     "cycle_shots":        ("Cycle shots (individual)", "shooting", "pbp", True, True),
@@ -32,22 +33,48 @@ STATS = {
     "primary_assists":    ("Primary assists", "passing", "pbp", True, True),
     "secondary_assists":  ("Secondary assists", "passing", "pbp", True, True),
     "primary_assist_xg":  ("xG of primary-assisted goals", "passing", "xg-model", True, True),
-    # puck battles: takeaways/giveaways by zone, relative to the player's team
+    # puck battles: takeaways/giveaways in all zones, and by zone relative to the player's team
+    "takeaways":          ("Takeaways", "puck battles", "pbp", True, True),
+    "giveaways":          ("Giveaways", "puck battles", "pbp", True, False),
+    "giveaway_xga":       ("xG against off his giveaways", "puck battles", "pbp+xg-model", True, False),
+    "take_give_ratio":    ("Takeaway : giveaway ratio", "puck battles", "pbp", False, True),
     "oz_takeaways":       ("Offensive-zone takeaways", "puck battles", "pbp", True, True),
     "dz_takeaways":       ("Defensive-zone takeaways", "puck battles", "pbp", True, True),
     "oz_giveaways":       ("Offensive-zone giveaways", "puck battles", "pbp", True, False),
     "dz_giveaways":       ("Defensive-zone giveaways", "puck battles", "pbp", True, False),
+    # defence
+    "blocks":             ("Shot blocks", "defence", "pbp", True, True),
+    "block_share":        ("Block share (of on-ice shots against)", "defence", "pbp+shifts", False, True),
+    "hits":               ("Hits", "defence", "pbp", True, True),
+    "hits_taken":         ("Hits taken", "physical", "pbp", True, True),
+    "fights":             ("Fights", "physical", "pbp", True, True),
+    "penalties_taken":    ("Penalties taken", "discipline", "pbp", True, False),
+    "penalties_drawn":    ("Penalties drawn", "discipline", "pbp", True, True),
     # on ice
     "shots_for":          ("On-ice shot attempts for", "on-ice", "pbp+shifts", True, True),
     "shots_against":      ("On-ice shot attempts against", "on-ice", "pbp+shifts", True, False),
+    "fenwick_for":        ("On-ice unblocked attempts for", "on-ice", "pbp+shifts", True, True),
+    "fenwick_against":    ("On-ice unblocked attempts against", "on-ice", "pbp+shifts", True, False),
+    # on-ice shares (already a %)
+    "fenwick_pct":        ("Fenwick % (on-ice)", "on-ice", "pbp+shifts", False, True),
+    "xgf_pct":            ("xGF% (on-ice)", "on-ice", "xg-model+shifts", False, True),
     "xgf":                ("On-ice xG for", "on-ice", "xg-model+shifts", True, True),
     "xga":                ("On-ice xG against", "on-ice", "xg-model+shifts", True, False),
+    "hd_xga":             ("On-ice high-danger xG against", "on-ice", "xg-model+shifts", True, False),
     "goals_for":          ("On-ice goals for", "on-ice", "pbp+shifts", True, True),
     "goals_against":      ("On-ice goals against", "on-ice", "pbp+shifts", True, False),
     "rush_shots_for":     ("On-ice rush shots for", "on-ice", "pbp+shifts", True, True),
     "rush_shots_against": ("On-ice rush shots against", "on-ice", "pbp+shifts", True, False),
     "cycle_shots_for":    ("On-ice cycle shots for", "on-ice", "pbp+shifts", True, True),
     "cycle_shots_against": ("On-ice cycle shots against", "on-ice", "pbp+shifts", True, False),
+    # on-ice GA/60 as a % of the team's GA/60 with him off the ice, same games (already a ratio)
+    "ga_on_off_pct":      ("Goals against on/off ice %", "on-ice", "pbp+shifts", False, False),
+    # on-ice unblocked attempts against per 60 as a % of the team's with him off the ice, same games (5v5 only)
+    "fa_on_off_pct":      ("Shots against on/off ice % (Fenwick)", "on-ice", "pbp+shifts", False, False),
+    # on-ice xGF% minus the team's xGF% with him off the ice, same games (percentage points; 5v5 only)
+    "xgf_pct_rel":        ("xGF% on/off ice (rel)", "on-ice", "xg-model+shifts", False, True),
+    # quality of competition: opponents' 5v5 xGF%, weighted by shared 5v5 ice time (already a %)
+    "qoc_xgf_pct":        ("Quality of competition (opponents' xGF%)", "competition", "xg-model+shifts", False, True),
     # NHL Edge (all situations, season values, not counts)
     "max_skating_speed":  ("Max skating speed (mph)", "edge", "nhl-edge", False, True),
     "bursts_over_20mph":  ("Speed bursts 20+ mph", "edge", "nhl-edge", True, True),

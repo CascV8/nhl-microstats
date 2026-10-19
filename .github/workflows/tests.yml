@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nhl-microstats
+      - uses: actions/checkout@v4
+        with:
+          repository: CascV8/Puckscrape
+          path: puckscrape
+      - uses: actions/checkout@v4
+        with:
+          repository: CascV8/xG-model
+          path: xg-model
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: nhl-microstats/uv.lock
+      - name: Run tests
+        working-directory: nhl-microstats
+        run: uv run pytest -q

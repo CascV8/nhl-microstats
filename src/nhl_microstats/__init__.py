@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 
 SEASONS = ["2021", "2022", "2023", "2024", "2025"]
 
@@ -43,12 +44,25 @@ def main() -> None:
     cd.add_argument("--season", default="2025")
     cd.add_argument("--out", default="cards.html")
     cd.add_argument("--vs-season", default="last3", help="comparison pool: 'last3' (default), 'all', or a start year")
-    cd.add_argument("--goal-tracking", action="store_true",
-                    help="add the goal-tracking section (run `goal-tracking` for the season first)")
 
     gtp = sub.add_parser("goal-tracking", help="download the NHL's goal tracking and build possession stats from it")
-    gtp.add_argument("seasons", nargs="*", default=["2025"])
+    gtp.add_argument("seasons", nargs="*", default=["2023", "2024", "2025"],
+                     help="start years; the NHL has goal tracking from 2023-24 on")
     gtp.add_argument("--workers", type=int, default=6)
+
+    st = sub.add_parser("site", help="export the static website to site/ (index + a card per player)")
+    st.add_argument("seasons", nargs="*", help="start years (default: the season in progress and the last complete one)")
+    st.add_argument("--out", default=None)
+
+    for name, helptext in (("update", "one pass: pull newly official games, rebuild the season, re-export the site"),
+                           ("watch", "run update every few minutes, forever")):
+        u = sub.add_parser(name, help=helptext)
+        u.add_argument("--season", default=None, help="start year (default: the season under way)")
+        u.add_argument("--out", default=None)
+        u.add_argument("--deploy", default=None, help="shell command to run after the site is rebuilt")
+        u.add_argument("--force", action="store_true", help="rebuild and export even with nothing new")
+        if name == "watch":
+            u.add_argument("--every", type=float, default=5, help="minutes between passes (default 5)")
 
     i = sub.add_parser("import-tracked", help="add hand-tracked microstats (entries, exits, passes...) from a CSV")
     i.add_argument("csv")
@@ -88,13 +102,24 @@ def main() -> None:
         print_stats()
     elif args.cmd == "cards":
         from .cards import write_cards
-        write_cards(args.players, season=args.season, out=args.out, vs_season=args.vs_season,
-                    goal_tracking=args.goal_tracking)
+        write_cards(args.players, season=args.season, out=args.out, vs_season=args.vs_season)
     elif args.cmd == "goal-tracking":
         from .goal_tracking import build_goal_tracking, collect_goal_tracking
         for s in args.seasons:
             collect_goal_tracking(s, workers=args.workers)
             build_goal_tracking(s)
+    elif args.cmd == "site":
+        from .site import OUT, export_site
+        export_site(args.seasons or None, args.out or OUT)
+    elif args.cmd in ("update", "watch"):
+        from .site import OUT
+        from .update import update_once, watch
+        kw = {"season": args.season, "out": args.out or OUT, "deploy": args.deploy, "force": args.force}
+        if args.cmd == "watch":
+            watch(args.every, **kw)
+        elif update_once(**kw) and os.environ.get("GITHUB_OUTPUT"):   # tell the workflow to deploy
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write("changed=true\n")
     elif args.cmd == "import-tracked":
         from .db import import_tracked
         import_tracked(args.csv, strength=args.strength)

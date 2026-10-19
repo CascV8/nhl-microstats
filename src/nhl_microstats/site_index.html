@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NHL Microstats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Same tokens as the player cards, so the directory and the cards read as one site. */
+:root {
+  --bg: #e9eef2; --surface: #ffffff; --ink: #0f1a24; --muted: #566573; --line: #d3dce3; --track: #e3e9ee;
+  --accent: #b3122e;
+  --elite: #1747c9; --good: #4f86e8; --avg: #a3afba; --weak: #dc5b34;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f0566c; --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f0566c; --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 24px 16px 48px; }
+
+header { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: end; justify-content: space-between; margin-bottom: 16px; }
+h1 { font: 700 2.4rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+h1 span { color: var(--accent); }
+.status { color: var(--muted); margin: 6px 0 0; font-size: .9rem; }
+.status b { color: var(--ink); font-weight: 600; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { font: 600 .82rem var(--body); letter-spacing: .03em; text-transform: uppercase; border: 0; background: none;
+  color: var(--muted); padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+input, select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; }
+input[type="search"] { width: min(260px, 100%); }
+input[type="number"] { width: 4.5em; }
+label { display: inline-flex; gap: 6px; align-items: center; font: 600 .78rem var(--body); text-transform: uppercase;
+  letter-spacing: .03em; color: var(--muted); }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.note { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface);
+  border-radius: 6px; padding: 10px 14px; margin: 0 0 14px; max-width: 80ch; }
+.note b { color: var(--accent); }
+
+.table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+th { font: 600 .74rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer;
+  position: sticky; top: 0; background: var(--surface); }
+th[aria-sort] { color: var(--ink); }
+th[aria-sort="descending"]::after { content: " ▾"; } th[aria-sort="ascending"]::after { content: " ▴"; }
+th.l, td.l { text-align: left; }
+td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--track); }
+td a { color: var(--ink); font-weight: 600; text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.dim { color: var(--muted); }
+.pct { display: inline-block; min-width: 2.4em; padding: 2px 6px; border-radius: 4px; font: 700 .86rem var(--display);
+  text-align: center; color: #fff; }
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
+.t-avg { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--muted); margin: 12px 0 0; }
+.legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>NHL Microstats <span id="season-name"></span></h1>
+      <p class="status" id="status">Loading…</p>
+    </div>
+    <label for="season">Season <select id="season"></select></label>
+  </header>
+
+  <p class="note" id="early" hidden></p>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search players or teams" aria-label="Search players or teams">
+    <div class="seg" role="group" aria-label="Position">
+      <button type="button" data-pos="all" aria-pressed="true">All</button>
+      <button type="button" data-pos="F" aria-pressed="false">Forwards</button>
+      <button type="button" data-pos="D" aria-pressed="false">Defense</button>
+    </div>
+    <div class="seg" role="group" aria-label="Stat basis">
+      <button type="button" data-mode="5v5" aria-pressed="true">5v5</button>
+      <button type="button" data-mode="all" aria-pressed="false">All situations</button>
+    </div>
+    <label for="team">Team <select id="team"><option value="">All</option></select></label>
+    <label for="mingp">Min GP <input type="number" id="mingp" min="0" value="0"></label>
+  </div>
+
+  <div class="table"><table>
+    <thead><tr id="head"></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+
+  <div class="legend">
+    <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
+    <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
+    <span>Category percentiles rank each player against every qualified player-season at his position from the comparison seasons. Click a player for his full card.</span>
+  </div>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+const tier = p => p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const pctCell = p => p == null || !isFinite(p) ? `<span class="dim">–</span>`
+  : `<span class="pct ${tier(p)}">${Math.min(Math.max(Math.round(p), 1), 99)}</span>`;
+
+const state = { season: null, pos: "all", mode: "5v5", q: "", team: "", mingp: 0, sort: "p", dir: -1 };
+try { Object.assign(state, JSON.parse(localStorage.getItem("site-state") || "{}"), { q: "" }); } catch (e) {}
+let META, DATA, CATS = [];
+
+const cols = () => [
+  { key: "name", label: "Player", cls: "l", get: r => r.name,
+    cell: r => `<a href="player.html?season=${state.season}&id=${r.id}">${esc(r.name)}</a>` },
+  { key: "team", label: "Team", cls: "l", get: r => r.team, cell: r => esc(r.team) },
+  { key: "pos", label: "Pos", cls: "l", get: r => r.pos, cell: r => esc(r.pos) },
+  { key: "gp", label: "GP", get: r => r.gp, cell: r => r.gp },
+  { key: "toi", label: "TOI/GP", get: r => r.toi, cell: r => r.toi.toFixed(1) },
+  { key: "p", label: "P", get: r => r.g + r.a, cell: r => `${r.g + r.a} <span class="dim">(${r.g}G)</span>` },
+  { key: "xgf", label: "xGF%", get: r => (r.modes[state.mode].xgf || [null, -1])[1],
+    cell: r => { const x = r.modes[state.mode].xgf; return x ? `${x[0].toFixed(1)} ${pctCell(x[1])}` : `<span class="dim">–</span>`; } },
+  ...CATS.map(t => ({ key: "cat:" + t, label: t, get: r => r.modes[state.mode].cats[t] ?? -1,
+    cell: r => pctCell(r.modes[state.mode].cats[t]) })),
+];
+
+function render() {
+  for (const b of document.querySelectorAll("[data-pos]")) b.setAttribute("aria-pressed", b.dataset.pos === state.pos);
+  for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", b.dataset.mode === state.mode);
+  const c = cols(), col = c.find(x => x.key === state.sort) || c[5];
+  $("head").innerHTML = c.map(x => `<th class="${x.cls || ""}" data-key="${x.key}" scope="col"
+    ${x.key === col.key ? `aria-sort="${state.dir < 0 ? "descending" : "ascending"}"` : ""}>${esc(x.label)}</th>`).join("");
+  const q = state.q.trim().toLowerCase();
+  const rows = DATA.rows.filter(r => (state.pos === "all" || r.group === state.pos) && r.gp >= state.mingp
+      && (!state.team || r.team.split("/").includes(state.team))
+      && (!q || r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q)))
+    .sort((a, b) => { const x = col.get(a), y = col.get(b);
+      return (typeof x === "string" ? x.localeCompare(y) : x - y) * state.dir; });
+  $("rows").innerHTML = rows.map(r => `<tr>${c.map(x => `<td class="${x.cls || ""}">${x.cell(r)}</td>`).join("")}</tr>`).join("")
+    || `<tr><td class="l" colspan="${c.length}">No players match.</td></tr>`;
+  try { localStorage.setItem("site-state", JSON.stringify(state)); } catch (e) {}
+}
+
+async function loadSeason(y) {
+  state.season = y;
+  DATA = await (await fetch(`data/${y}/index.json`)).json();
+  CATS = Object.keys(DATA.sections);
+  const s = META.seasons.find(s => s.season == y);
+  $("season-name").textContent = DATA.early ? `${DATA.season} so far` : DATA.season;
+  const built = new Date(META.built);
+  $("status").innerHTML = `<b>${s.players}</b> skaters` + (s.games != null ? ` · <b>${s.games}</b> games` : "") +
+    (s.awaiting_shifts.length ? ` · ${s.awaiting_shifts.length} awaiting NHL shift charts (left out until posted)` : "") +
+    ` · updated ${built.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
+  $("early").hidden = !DATA.early;
+  $("early").innerHTML = `<b>Season in progress.</b> ${esc(DATA.season)} numbers are ranked against full seasons from ` +
+    `${esc(DATA.vs_season)}, so early-season percentiles swing a lot. A minimum games filter helps.`;
+  const teams = [...new Set(DATA.rows.flatMap(r => r.team.split("/")))].sort();
+  $("team").innerHTML = `<option value="">All</option>` + teams.map(t => `<option>${esc(t)}</option>`).join("");
+  if (!teams.includes(state.team)) state.team = "";
+  $("team").value = state.team;
+  $("foot").textContent = `Percentiles compare each player with every ${DATA.vs_season} player-season at his position ` +
+    `with ${DATA.min_toi["5v5"]}+ minutes at 5v5 or ${DATA.min_toi.all}+ in all situations. Players below that still get ` +
+    `percentiles, from the same curves. Data: NHL play-by-play, shift charts and NHL Edge.`;
+  render();
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"), th = e.target.closest("th");
+  if (b?.dataset.pos) { state.pos = b.dataset.pos; render(); }
+  if (b?.dataset.mode) { state.mode = b.dataset.mode; render(); }
+  if (th) { const k = th.dataset.key;
+    state.dir = state.sort === k ? -state.dir : (["name", "team", "pos"].includes(k) ? 1 : -1); state.sort = k; render(); }
+});
+$("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("team").addEventListener("change", e => { state.team = e.target.value; render(); });
+$("mingp").addEventListener("input", e => { state.mingp = +e.target.value || 0; render(); });
+$("season").addEventListener("change", e => loadSeason(+e.target.value));
+
+fetch("data/meta.json").then(r => r.json()).then(m => {
+  META = m;
+  $("season").innerHTML = m.seasons.map(s => `<option value="${s.season}">${esc(s.name)}</option>`).join("");
+  const y = m.seasons.some(s => s.season == state.season) ? state.season : m.seasons[0].season;
+  $("season").value = y;
+  $("mingp").value = state.mingp;
+  loadSeason(y);
+}).catch(() => { $("status").textContent = "Couldn't load the stats. Try again in a minute."; });
+</script>
+</body>
+</html>
