@@ -1,0 +1,231 @@
+<title>NHL Microstat Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: a scouting binder. Controls bar, then a grid of cards; each card is a team-colour band,
+   a headline number, and percentile rows with a tick at the league median. */
+:root {
+  --bg: #e9eef2; --surface: #ffffff; --ink: #0f1a24; --muted: #566573; --line: #d3dce3; --track: #e3e9ee;
+  --accent: #b3122e;
+  --elite: #1747c9; --good: #4f86e8; --avg: #a3afba; --weak: #dc5b34;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f0566c; --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f0566c; --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; }
+
+header { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: end; justify-content: space-between; margin-bottom: 20px; }
+h1 { font: 700 2.4rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { color: var(--muted); margin: 6px 0 0; max-width: 62ch; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { font: 600 .82rem var(--body); letter-spacing: .03em; text-transform: uppercase; border: 0; background: none;
+  color: var(--muted); padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label.sort { display: inline-flex; gap: 8px; align-items: center; font: 600 .82rem var(--body); text-transform: uppercase;
+  letter-spacing: .03em; color: var(--muted); }
+select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; max-width: 220px; }
+
+.note { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface);
+  border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; max-width: 80ch; }
+.note b { color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--muted); margin: 0 0 18px; }
+.legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+.band { background: var(--team); color: var(--team-ink); padding: 12px 14px 10px; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+.band .name { font: 700 1.65rem/1.02 var(--display); text-transform: uppercase; letter-spacing: .01em; grid-column: 1; text-wrap: balance; }
+.band .tag { grid-column: 2; grid-row: 1 / span 2; align-self: start; text-align: right; font: 600 .78rem/1.3 var(--display);
+  letter-spacing: .08em; text-transform: uppercase; opacity: .92; }
+.band .tag b { display: block; font-size: 1.5rem; line-height: 1; letter-spacing: .02em; }
+.band .line { font: 600 .82rem var(--body); letter-spacing: .02em; opacity: .9; font-variant-numeric: tabular-nums; }
+
+.head { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.big { font: 700 2.5rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.big small { font-size: 1.1rem; }
+.head .cap { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip { font: 600 .74rem/1 var(--body); padding: 4px 7px; border-radius: 999px; background: var(--track); color: var(--ink); white-space: nowrap; }
+.chip b { color: var(--elite); }
+
+section { padding: 8px 14px 10px; }
+section + section { border-top: 1px dashed var(--line); }
+h3 { font: 600 .78rem var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 2px 0 4px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 4.2em 72px 2.6em; gap: 8px; align-items: center; padding: 2px 0; font-size: .86rem; }
+.row .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.row .pct { text-align: right; font: 700 .95rem var(--display); font-variant-numeric: tabular-nums; }
+.bar { position: relative; height: 7px; background: var(--track); border-radius: 4px; }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
+.flip { color: var(--muted); font-size: .72rem; margin-left: 4px; }
+
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
+
+footer { margin-top: 28px; color: var(--muted); font-size: .86rem; max-width: 80ch; display: grid; gap: 8px; }
+footer p { margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .bar i { transition: width .35s ease; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Microstat Cards <span id="season"></span></h1>
+      <p class="sub" id="sub">Ranked against every qualified skater at their position.
+        Your xG model scores every shot; Edge numbers come from NHL puck and player tracking.</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Stat basis">
+        <button type="button" id="m-5v5" data-mode="5v5" aria-pressed="true">5v5 per 60</button>
+        <button type="button" id="m-all" data-mode="all" aria-pressed="false">All-sit per 60</button>
+      </div>
+      <div class="seg" role="group" aria-label="Position">
+        <button type="button" id="p-all" data-pos="all" aria-pressed="true">All</button>
+        <button type="button" id="p-F" data-pos="F" aria-pressed="false">Forwards</button>
+        <button type="button" id="p-D" data-pos="D" aria-pressed="false">Defense</button>
+      </div>
+      <label class="sort" for="sort">Sort <select id="sort"></select></label>
+    </div>
+  </header>
+
+  <p class="note" id="note" hidden></p>
+
+  <div class="legend">
+    <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
+    <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
+    <span>Tick = league median. Stats marked ↓ are flipped (fewer is better), so a higher percentile is always better.</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <p id="pool"></p>
+    <p><b>Rush</b>: the puck was recorded outside the attacking zone in the previous 8 s with no faceoff since.
+      The NHL logs no zone entries, so play-by-play only catches about 6% of attempts as rush (video tracking finds 20–30%).
+      Rush percentiles rest on small counts. <b>Cycle</b>: 10+ s of in-zone play since the last exit or faceoff, not a rebound or rush.</p>
+    <p>Not available from NHL data: passes, shot assists, zone entries and exits, entry denials, retrievals.</p>
+    <p id="gt-note" hidden><b>Goal tracking</b>: from the NHL's puck and player tracking of the ~14 s before each goal, the data behind
+      nhl.com's goal replays. It only exists for goals, so these count what a player did in the build-up to his team's goals:
+      time with the puck, carries over the offensive blue line, defenders beaten (an opponent within 10 ft who was ahead of
+      the carrier and ends up behind him), dekes (the puck swinging 2.5+ ft across his body within 0.5 s with an opponent
+      or the goalie within 10 ft; not checked against video).
+      Possession is inferred from the puck staying within 5 ft of a skater and moving with him. Ranked against 2025-26 only.</p>
+  </footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const TEAMS = { ANA:["#f47a38","#111"], BOS:["#ffb81c","#111"], BUF:["#003087","#fff"], CGY:["#c8102e","#fff"],
+  CAR:["#ce1126","#fff"], CHI:["#cf0a2c","#fff"], COL:["#6f263d","#fff"], CBJ:["#002654","#fff"], DAL:["#006847","#fff"],
+  DET:["#ce1126","#fff"], EDM:["#041e42","#ff8a4c"], FLA:["#c8102e","#fff"], LAK:["#111111","#fff"], MIN:["#154734","#fff"],
+  MTL:["#af1e2d","#fff"], NSH:["#ffb81c","#111"], NJD:["#ce1126","#fff"], NYI:["#00539b","#fff"], NYR:["#0038a8","#fff"],
+  OTT:["#c52032","#fff"], PHI:["#f74902","#111"], PIT:["#111111","#fcb514"], SJS:["#006d75","#fff"], SEA:["#001628","#99d9d9"],
+  STL:["#002f87","#fff"], TBL:["#002868","#fff"], TOR:["#00205b","#fff"], UTA:["#0b162a","#6cace4"], VAN:["#00205b","#fff"],
+  VGK:["#b4975a","#111"], WSH:["#c8102e","#fff"], WPG:["#041e42","#fff"] };
+const POS = { C: "Centre", L: "Left wing", R: "Right wing", D: "Defense" };
+
+// Units and precision per stat. Rates in 5v5 mode, counts in all-sit mode.
+const EDGE_FIXED = { max_skating_speed: " mph", shot_strength: " mph", oz_time_pct: "%" };
+function fmt(stat, v, mode) {
+  if (stat in EDGE_FIXED) return v.toFixed(1) + EDGE_FIXED[stat];
+  if (stat.endsWith("_pct")) return v.toFixed(1) + "%";
+  return v.toFixed(2);   // every count stat is a rate per 60
+}
+const ord = n => { n = Math.min(Math.max(Math.round(n), 1), 99); const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({1:"st",2:"nd",3:"rd"})[n % 10] || "th"; return n + s; };
+const tier = p => p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+
+const state = { mode: "5v5", pos: "all", sort: "points" };
+try { Object.assign(state, JSON.parse(localStorage.getItem("cards-state") || "{}")); } catch (e) {}
+
+function card(c) {
+  const [team, ink] = TEAMS[c.team.split("/")[0]] || ["#33414d", "#fff"];
+  const m = c.modes[state.mode];
+  const lower = new Set(DATA.lower_is_better);
+  const signature = Object.entries(m).filter(([s]) => !(s in EDGE_FIXED) || s === "max_skating_speed")
+    .sort((a, b) => b[1].pct - a[1].pct).slice(0, 3);
+  const sections = Object.entries(DATA.sections).map(([title, stats]) => {
+    const rows = stats.filter(s => m[s]).map(s => {
+      const r = m[s], flip = lower.has(s);
+      return `<div class="row" title="${esc(DATA.labels[s])}: ${ord(r.pct)} percentile${flip ? " (fewer is better, flipped)" : ""}">
+        <span class="lab">${esc(DATA.labels[s].replace(/^On-ice /, ""))}${flip ? '<span class="flip">↓ better</span>' : ""}</span>
+        <span class="val">${fmt(s, r.v, state.mode)}</span>
+        <span class="bar"><i class="${tier(r.pct)}" style="width:${Math.max(r.pct, 1.5)}%"></i></span>
+        <span class="pct">${ord(r.pct)}</span></div>`;
+    }).join("");
+    return `<section><h3>${esc(title)}</h3>${rows}</section>`;
+  }).join("");
+  return `<article class="card" style="--team:${team};--team-ink:${ink}">
+    <div class="band">
+      <div class="name">${esc(c.name)}</div>
+      <div class="tag"><b>${esc(c.team)}</b>${esc(POS[c.position] || c.position)}</div>
+      <div class="line">${c.gp_played > c.gp ? `${c.gp} GP tracked (${c.gp_played} played)` : `${c.gp} GP`} · ${c.toi.toFixed(1)} TOI/GP · ${c.g}G ${c.a}A ${c.g + c.a}P</div>
+    </div>
+    <div class="head">
+      <div><div class="big">${c.xgf_share.toFixed(1)}<small>%</small></div><div class="cap">5v5 xGF% · ${ord(c.xgf_share_pct)}</div></div>
+      <div><div class="cap">Best marks</div><div class="chips">${signature.map(([s, r]) =>
+        `<span class="chip"><b>${ord(r.pct)}</b> ${esc(DATA.labels[s].replace(/^On-ice /, "").replace(/ \(.*\)$/, ""))}</span>`).join("")}</div></div>
+    </div>
+    ${sections}
+  </article>`;
+}
+
+function render() {
+  for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", b.dataset.mode === state.mode);
+  for (const b of document.querySelectorAll("[data-pos]")) b.setAttribute("aria-pressed", b.dataset.pos === state.pos);
+  const sel = document.getElementById("sort");
+  if (!sel.options.length) {
+    sel.innerHTML = `<option value="points">Points</option><option value="xgf_share">5v5 xGF%</option>` +
+      Object.entries(DATA.sections).map(([t, ss]) => `<optgroup label="${esc(t)}">${ss.map(s =>
+        `<option value="${s}">${esc(DATA.labels[s])}</option>`).join("")}</optgroup>`).join("");
+  }
+  sel.value = state.sort;
+  if (sel.value !== state.sort) { state.sort = "points"; sel.value = "points"; }
+  const key = c => state.sort === "points" ? c.g + c.a : state.sort === "xgf_share" ? c.xgf_share
+    : (c.modes[state.mode][state.sort] || { pct: -1 }).pct;
+  const cards = DATA.cards.filter(c => state.pos === "all" || c.group === state.pos).sort((a, b) => key(b) - key(a));
+  document.getElementById("grid").innerHTML = cards.map(card).join("");
+  try { localStorage.setItem("cards-state", JSON.stringify(state)); } catch (e) {}
+}
+
+const early = DATA.early;
+document.getElementById("season").textContent = early ? `${DATA.season} so far` : DATA.season;
+if (early) {
+  const gp = Math.max(...DATA.cards.map(c => c.gp));
+  const note = document.getElementById("note");
+  note.innerHTML = `<b>Small sample.</b> ${DATA.season} rates come from ${gp === 1 ? "1 game" : `${gp} games`} or fewer, ` +
+    `ranked against full seasons from ${esc(DATA.vs_season)}. Read them as an early look: a single shift can move a percentile ` +
+    `by 20 points this early. Edge numbers are ${esc(DATA.season)} tracking so far, and top speed is a season maximum that only climbs as games are added.`;
+  note.hidden = false;
+}
+document.getElementById("pool").textContent =
+  `Percentiles compare each player with every ${DATA.vs_season} player-season at the same position (forwards or defense) ` +
+  `with ${DATA.min_toi["5v5"]}+ minutes at 5v5 (5v5 per 60) or ${DATA.min_toi.all}+ minutes in all situations. Every count is a rate per 60 minutes, and percentiles come from logistic curves fitted to each pool. ` +
+  `Edge stats are all situations in both views. xG is from your own xG model.`;
+document.getElementById("gt-note").hidden = !Object.values(DATA.sections).flat().some(s => s.startsWith("gt_"));
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.mode) state.mode = b.dataset.mode;
+  if (b.dataset.pos) state.pos = b.dataset.pos;
+  render();
+});
+document.getElementById("sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
+render();
+</script>
