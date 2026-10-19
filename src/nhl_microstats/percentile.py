@@ -25,6 +25,24 @@ from .db import connect
 MIN_TOI = {"5v5": 200, "all": 300}   # minutes to qualify for the pool
 REFERENCE = "last3"                  # default pool: every qualified player-season of the last 3 complete seasons
 
+# Arena scorers started logging far more giveaways and fewer takeaways in 2024-25 (forwards'
+# median giveaways per 60 at 5v5 went from 1.4 to 2.9, takeaways from 1.7 to 0.95), so these
+# can't share a pool across seasons. Each player-season is ranked against its own season
+# instead; those percentiles then pool like any other. A season still in progress uses the
+# latest complete season, which is scored the same way.
+SEASON_RELATIVE = frozenset({"takeaways", "giveaways", "take_give_ratio", "giveaway_xga",
+                             "oz_takeaways", "dz_takeaways", "oz_giveaways", "dz_giveaways"})
+
+
+def _ranked_against(stat: str, season, player_season: int | None = None):
+    """The pool to rank ``stat`` against: ``season`` itself, or for a season-relative stat in
+    a multi-season pool, the player's own season (the latest complete one, if his isn't)."""
+    if stat not in SEASON_RELATIVE or len(_seasons(season)) == 1:
+        return season
+    done = complete_seasons()
+    y = player_season if player_season is not None else max(_seasons(season))
+    return [y] if y in done else [max([s for s in done if s <= y] or done)]
+
 
 def _defs() -> pd.DataFrame:
     with connect() as con:
@@ -120,8 +138,9 @@ def percentile(stat: str, value: float, season=REFERENCE, position: str = "F", s
     """Where ``value`` would rank among qualified forwards (``position="F"``)
     or defensemen (``"D"``). Returns the fitted
     percentile, the raw mid-rank, and the pool's size, median and 90th
-    percentile for context."""
-    values, info = pool(stat, season, position, strength, per60, min_toi)
+    percentile for context. Season-relative stats (takeaways and giveaways) in a
+    multi-season pool rank against its latest season."""
+    values, info = pool(stat, _ranked_against(stat, season), position, strength, per60, min_toi)
     if len(values) == 0:
         raise ValueError(f"no qualified players for {stat} in {info['seasons']}; is that season built?")
     curve = curve_for(values, info)
@@ -135,6 +154,44 @@ def percentile(stat: str, value: float, season=REFERENCE, position: str = "F", s
         # the value a player needs for the 90th percentile (the 10th raw percentile when less is better)
         "pool_p90": float(np.percentile(values, 90 if info["higher_is_better"] else 10)) if len(values) else None,
     }
+
+
+def season_table(season, strength: str = "5v5", per60: bool = True, pool_season=None) -> pd.DataFrame:
+    """``player_table`` for every skater in a season at once: one row per (player, stat)
+    with value and percentile. Each pool and curve is loaded once, not once per player."""
+    y = start_year(season)
+    spec0 = REFERENCE if pool_season is None else pool_season
+    with connect() as con:
+        ps_ = pd.read_sql("SELECT * FROM player_seasons WHERE season = ?", con, params=[y]).set_index("player_id")
+        mine = pd.read_sql("SELECT player_id, strength, stat, value FROM stats WHERE season = ?", con, params=[y])
+    defs = _defs()
+    out = []
+    for stat, s in mine.groupby("stat"):
+        if stat not in defs.index:
+            continue
+        st = strength if (s["strength"] == strength).any() else s["strength"].iloc[0]
+        s = s[s["strength"] == st].set_index("player_id")["value"]
+        for pos in curves.POSITIONS:
+            ids = ps_.index[ps_["pos_group"] == pos].intersection(s.index)
+            if ids.empty:
+                continue
+            values, info = pool(stat, _ranked_against(stat, spec0, y), pos, st, per60)
+            if len(values) == 0:
+                continue
+            v = s.loc[ids].astype(float)
+            if info["per60"]:
+                toi = ps_.loc[ids, f"toi_{st}"].astype(float)
+                v = (v / toi * 3600).where(toi > 0)
+            ok = np.isfinite(v.to_numpy())
+            pct = np.full(len(v), np.nan)
+            if ok.any():
+                pct[ok] = curve_for(values, info)(v.to_numpy()[ok])
+                pct = pct if info["higher_is_better"] else 100 - pct
+            out.append(pd.DataFrame({"player_id": ids, "stat": stat, "label": info["label"], "strength": st,
+                                     "value": v.to_numpy(), "percentile": pct}))
+    t = pd.concat(out, ignore_index=True)
+    t.attrs["players"] = ps_
+    return t
 
 
 def player_table(player: str | int, season="2025", strength: str = "5v5", per60: bool = True,
@@ -166,7 +223,8 @@ def player_table(player: str | int, season="2025", strength: str = "5v5", per60:
             continue
         row = have[have["strength"] == strength]
         row = row if len(row) else have
-        values, info = pool(stat, REFERENCE if pool_season is None else pool_season, p["pos_group"], row["strength"].iloc[0], per60)
+        spec = _ranked_against(stat, REFERENCE if pool_season is None else pool_season, y)
+        values, info = pool(stat, spec, p["pos_group"], row["strength"].iloc[0], per60)
         v = row["value"].iloc[0]
         if info["per60"]:
             toi = p[f"toi_{info['strength']}"]

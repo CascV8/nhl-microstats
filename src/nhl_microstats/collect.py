@@ -22,8 +22,12 @@ log = logging.getLogger("nhl_microstats.collect")
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
 
-# player_id is the player credited with a takeaway or giveaway.
-PBP_KEEP = KEEP | {"assist1_player_id": "Int64", "assist2_player_id": "Int64", "player_id": "Int64"}
+# player_id is the player credited with a takeaway or giveaway; blocking/hitting/hittee for blocks and hits;
+# committed_by/drawn_by, the penalty type (MIN, MAJ, MIS, ...) and its description for penalties.
+PBP_KEEP = KEEP | {"assist1_player_id": "Int64", "assist2_player_id": "Int64", "player_id": "Int64",
+                   "blocking_player_id": "Int64", "hitting_player_id": "Int64", "hittee_player_id": "Int64",
+                   "committed_by_player_id": "Int64", "drawn_by_player_id": "Int64",
+                   "details_type_code": "string", "desc_key": "string"}
 SHIFT_KEEP = {"player_id": "int64", "team_abbrev": "string", "period": "int64",
               "start_seconds": "int64", "end_seconds": "int64"}
 
@@ -56,10 +60,11 @@ def _stale(path: Path) -> bool:
     return not path.exists() or not set(PBP_KEEP) <= set(pq.read_schema(path).names)
 
 
-def _retry_missing_shifts(folder: Path) -> None:
-    """The NHL sometimes posts shift charts days after a game; re-ask for any cached empty."""
+def _retry_missing_shifts(folder: Path) -> list[int]:
+    """The NHL sometimes posts shift charts days after a game; re-ask for any cached empty.
+    Returns the games that have them now."""
     empty = [p for p in folder.glob("*_shifts.parquet") if pq.read_metadata(p).num_rows == 0]
-    found = 0
+    found = []
     for p in empty:
         try:
             shifts = ps.nhl.shifts(int(p.stem.split("_")[0]))
@@ -68,23 +73,27 @@ def _retry_missing_shifts(folder: Path) -> None:
             continue
         if len(shifts):
             _slim(shifts, SHIFT_KEEP).to_parquet(p)
-            found += 1
+            found.append(int(p.stem.split("_")[0]))
     if empty:
-        log.info("%s: %d of %d games without shift charts now have them", folder.name, found, len(empty))
+        log.info("%s: %d of %d games without shift charts now have them", folder.name, len(found), len(empty))
+    return found
 
 
-def collect_games(season, workers: int = 8) -> None:
+def collect_games(season, workers: int = 8) -> list[int]:
+    """Download every completed game not cached yet, and retry missing shift charts.
+    Returns the games that changed: newly downloaded, or shift charts that arrived."""
     folder = game_dir(season)
     folder.mkdir(parents=True, exist_ok=True)
     todo = [g for g in game_ids(season) if _stale(folder / f"{g}_pbp.parquet")]
     log.info("%s: %d games to download", season, len(todo))
-    _retry_missing_shifts(folder)
+    changed = _retry_missing_shifts(folder)
     failed = []
     with ThreadPoolExecutor(workers) as pool:
         futures = {pool.submit(_fetch, g, folder): g for g in todo}
         for i, fut in enumerate(as_completed(futures), 1):
             try:
                 fut.result()
+                changed.append(futures[fut])
             except Exception as e:  # one bad game shouldn't sink the season
                 failed.append(futures[fut])
                 log.warning("game %s failed: %s", futures[fut], e)
@@ -92,22 +101,26 @@ def collect_games(season, workers: int = 8) -> None:
                 log.info("%s: %d/%d", season, i, len(todo))
     if failed:
         log.warning("%d games failed; rerun to retry: %s", len(failed), failed[:10])
+    return changed
 
 
-def collect_bios(season) -> Path:
-    """Name and position for every skater who played that season."""
+def collect_bios(season, refresh: bool = False) -> Path:
+    """Name and position for every skater who played that season. ``refresh`` re-downloads,
+    for a season in progress (call-ups and debuts)."""
     path = DATA / f"bios_{start_year(season)}.parquet"
-    if not path.exists():
+    if refresh or not path.exists():
         bios = ps.nhl.skater_stats(season, report="bios")
         bios = bios.rename(columns={"player_id": "player_id", "skater_full_name": "name", "position_code": "position"})
         bios[["player_id", "name", "position"]].to_parquet(path)
     return path
 
 
-def collect_edge(season, player_ids, workers: int = 4) -> Path:
-    """NHL Edge skater summaries (speed, shot speed, distance, zone time)."""
+def collect_edge(season, player_ids, workers: int = 4, refresh=()) -> Path:
+    """NHL Edge skater summaries (speed, shot speed, distance, zone time). Players in
+    ``refresh`` are downloaded again (their season totals grow with every game)."""
     path = DATA / f"edge_{start_year(season)}.parquet"
     have = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=["player_id"])
+    have = have[~have["player_id"].astype(int).isin(set(map(int, refresh)))]
     todo = sorted(set(int(p) for p in player_ids) - set(have["player_id"].astype(int)))
     log.info("%s: %d Edge summaries to download", season, len(todo))
     rows = []
@@ -132,10 +145,11 @@ def _shot_speed(player_id: int, season) -> dict:
     return {"player_id": player_id, "avg_shot_speed": (d.get("avgShotSpeed") or {}).get("imperial")}
 
 
-def collect_shot_speed(season, player_ids, workers: int = 4) -> Path:
+def collect_shot_speed(season, player_ids, workers: int = 4, refresh=()) -> Path:
     """Average shot speed from NHL Edge (the summary only has the hardest shot)."""
     path = DATA / f"edge_shots_{start_year(season)}.parquet"
     have = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=["player_id", "avg_shot_speed"])
+    have = have[~have["player_id"].astype(int).isin(set(map(int, refresh)))]
     todo = sorted(set(int(p) for p in player_ids) - set(have["player_id"].astype(int)))
     log.info("%s: %d Edge shot speeds to download", season, len(todo))
     rows = []
