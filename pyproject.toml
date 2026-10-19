@@ -1,0 +1,34 @@
+[project]
+name = "nhl-microstats"
+version = "0.1.0"
+description = "NHL skater microstats and league percentiles, built on puckscrape and xg-model"
+readme = "README.md"
+authors = [
+    { name = "casc", email = "cruidadengv8@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "puckscrape",
+    "pyarrow>=26.0.0",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "xg-model",
+]
+
+[project.scripts]
+nhl-microstats = "nhl_microstats:main"
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+puckscrape = { path = "../puckscrape", editable = true }
+xg-model = { path = "../xg-model", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
