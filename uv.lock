@@ -500,7 +500,7 @@ dev = [
 requires-dist = [
     { name = "numpy", specifier = ">=2.5.3" },
     { name = "pandas", specifier = ">=3.0.6" },
-    { name = "puckscrape", editable = "../puckscrape" },
+    { name = "puckscrape", git = "https://github.com/CascV8/Puckscrape.git" },
     { name = "pyarrow", specifier = ">=26.0.0" },
     { name = "scikit-learn", specifier = ">=1.9.1" },
     { name = "scipy", specifier = ">=1.18.1" },
@@ -708,24 +708,12 @@ wheels = [
 [[package]]
 name = "puckscrape"
 version = "0.1.0"
-source = { editable = "../puckscrape" }
+source = { git = "https://github.com/CascV8/Puckscrape.git#22ff709ed0a0830dc2c3faacbaaa7c5d38f524c1" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "pandas" },
     { name = "requests" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "beautifulsoup4", specifier = ">=4.12" },
-    { name = "pandas", specifier = ">=2.0" },
-    { name = "requests", specifier = ">=2.31" },
-    { name = "topdownhockey-scraper", marker = "extra == 'tdh'", specifier = ">=6.1" },
-]
-provides-extras = ["tdh"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "pyarrow"
@@ -1007,7 +995,7 @@ dependencies = [
 requires-dist = [
     { name = "joblib", specifier = ">=1.6.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
-    { name = "puckscrape", editable = "../puckscrape" },
+    { name = "puckscrape", git = "https://github.com/CascV8/Puckscrape.git" },
     { name = "pyarrow", specifier = ">=26.0.0" },
     { name = "scikit-learn", specifier = ">=1.9.1" },
 ]

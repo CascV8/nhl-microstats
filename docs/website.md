@@ -38,8 +38,8 @@ data/<season>/index.json            one compact row per skater (what the index t
 data/<season>/players/<id>.json     one card, the same shape the cards page embeds (~3 KB)
 ```
 
-The current season and the last complete season are exported by default (about 1,600
-player files, 15 MB). Adding seasons is `nhl-microstats site 2026 2025 2024 ...`.
+Seasons from 2023-24 (the first season of the comparison pool) on are exported by default (about 3,450
+player files, 32 MB). Adding seasons is `nhl-microstats site 2026 2025 2024 ...`.
 `card_data` builds every player from `percentile.season_table`, which ranks a whole
 season in one pass per stat (about 40 s per season instead of hours of per-player queries).
 A test checks that it matches `player_table` exactly.

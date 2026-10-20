@@ -39,10 +39,6 @@ jobs:
           path: nhl-microstats
       - uses: actions/checkout@v4
         with:
-          repository: CascV8/Puckscrape
-          path: puckscrape
-      - uses: actions/checkout@v4
-        with:
           repository: CascV8/xG-model
           path: xg-model
 

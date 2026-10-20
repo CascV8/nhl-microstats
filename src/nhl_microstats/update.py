@@ -103,7 +103,7 @@ def update_once(season=None, out=OUT, deploy: str | None = None, force: bool = F
     collect.collect_edge(y, bios["player_id"], refresh=played)
     collect.collect_shot_speed(y, bios["player_id"], refresh=played)
     build_season(y)
-    export_site(sorted({y, *default_seasons()}, reverse=True), out)
+    export_site(sorted({y, *default_seasons()}, reverse=True), out)   # past seasons come from the cache
     if deploy:
         log.info("deploying: %s", deploy)
         subprocess.run(deploy, shell=True, check=True)

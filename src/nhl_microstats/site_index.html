@@ -99,7 +99,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
       <button type="button" data-mode="all" aria-pressed="false">All situations</button>
     </div>
     <label for="team">Team <select id="team"><option value="">All</option></select></label>
-    <label for="mingp">Min GP <input type="number" id="mingp" min="0" value="0"></label>
+    <label for="mingp">Min GP <input type="number" id="mingp" min="0" value="10"></label>
   </div>
 
   <div class="table"><table>
@@ -110,7 +110,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
   <div class="legend">
     <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
     <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
-    <span>Category percentiles rank each player against every qualified player-season at his position from the comparison seasons. Click a player for his full card.</span>
+    <span>Overall averages the category percentiles (all but Competition) and ranks that average with its own curve. Category percentiles rank each player against every qualified player-season at his position from the comparison seasons. Click a player for his full card.</span>
   </div>
   <footer id="foot"></footer>
 </div>
@@ -119,10 +119,15 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
 const tier = p => p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const shown = p => Math.min(Math.max(Math.round(p), 1), 99);   // the percentile as displayed
+// Sort keys are [percentile as shown, raw value]: ties on the shown percentile go to the raw number.
+const sample = r => [r.gp, r.gp * r.toi];   // the last tie-breakers: bigger sample first
+const byKey = (x, y) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
 const pctCell = p => p == null || !isFinite(p) ? `<span class="dim">–</span>`
   : `<span class="pct ${tier(p)}">${Math.min(Math.max(Math.round(p), 1), 99)}</span>`;
 
-const state = { season: null, pos: "all", mode: "5v5", q: "", team: "", mingp: 0, sort: "p", dir: -1 };
+const MIN_GP = 10;   // default sample-size filter; visitors can lower it
+const state = { season: null, pos: "all", mode: "5v5", q: "", team: "", mingp: MIN_GP, sort: "p", dir: -1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem("site-state") || "{}"), { q: "" }); } catch (e) {}
 let META, DATA, CATS = [];
 
@@ -133,11 +138,15 @@ const cols = () => [
   { key: "pos", label: "Pos", cls: "l", get: r => r.pos, cell: r => esc(r.pos) },
   { key: "gp", label: "GP", get: r => r.gp, cell: r => r.gp },
   { key: "toi", label: "TOI/GP", get: r => r.toi, cell: r => r.toi.toFixed(1) },
-  { key: "p", label: "P", get: r => r.g + r.a, cell: r => `${r.g + r.a} <span class="dim">(${r.g}G)</span>` },
-  { key: "xgf", label: "xGF%", get: r => (r.modes[state.mode].xgf || [null, -1])[1],
+  { key: "p", label: "P", get: r => [r.g + r.a, r.g, ...sample(r)], cell: r => `${r.g + r.a} <span class="dim">(${r.g}G)</span>` },
+  { key: "xgf", label: "xGF%", get: r => { const x = r.modes[state.mode].xgf; return x ? [shown(x[1]), x[0], ...sample(r)] : [-1, -Infinity, 0, 0]; },
     cell: r => { const x = r.modes[state.mode].xgf; return x ? `${x[0].toFixed(1)} ${pctCell(x[1])}` : `<span class="dim">–</span>`; } },
-  ...CATS.map(t => ({ key: "cat:" + t, label: t, get: r => r.modes[state.mode].cats[t] ?? -1,
-    cell: r => pctCell(r.modes[state.mode].cats[t]) })),
+  { key: "overall", label: "Overall",
+    get: r => { const o = r.modes[state.mode].overall; return o ? [shown(o[0]), o[1], ...sample(r)] : [-1, -Infinity, 0, 0]; },
+    cell: r => pctCell((r.modes[state.mode].overall || [])[0]) },
+  ...CATS.map(t => ({ key: "cat:" + t, label: t,
+    get: r => { const c = r.modes[state.mode].cats[t]; return c ? [shown(c[0]), c[1], ...sample(r)] : [-1, -Infinity, 0, 0]; },
+    cell: r => pctCell((r.modes[state.mode].cats[t] || [])[0]) })),
 ];
 
 function render() {
@@ -151,9 +160,12 @@ function render() {
       && (!state.team || r.team.split("/").includes(state.team))
       && (!q || r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q)))
     .sort((a, b) => { const x = col.get(a), y = col.get(b);
-      return (typeof x === "string" ? x.localeCompare(y) : x - y) * state.dir; });
+      return (typeof x === "string" ? x.localeCompare(y) : Array.isArray(x) ? byKey(x, y) : x - y) * state.dir; });
   $("rows").innerHTML = rows.map(r => `<tr>${c.map(x => `<td class="${x.cls || ""}">${x.cell(r)}</td>`).join("")}</tr>`).join("")
-    || `<tr><td class="l" colspan="${c.length}">No players match.</td></tr>`;
+    || `<tr><td class="l" colspan="${c.length}">${DATA.rows.some(r => r.gp < state.mingp)
+         && !DATA.rows.some(r => r.gp >= state.mingp)
+         ? `No one has ${state.mingp}+ games yet this season. Lower <b>Min GP</b> to see everyone (small samples swing a lot).`
+         : "No players match."}</td></tr>`;
   try { localStorage.setItem("site-state", JSON.stringify(state)); } catch (e) {}
 }
 

@@ -44,7 +44,7 @@ select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surfa
 .note { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface);
   border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; max-width: 80ch; }
 .note b { color: var(--accent); }
-.back { margin: 0 0 8px; font: 600 .86rem var(--body); }
+.back { margin: 0 0 8px; font: 600 .86rem var(--body); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .back a, .note a { color: var(--accent); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--muted); margin: 0 0 18px; }
 .legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
@@ -61,6 +61,9 @@ select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surfa
 .cat .t { font: 600 .84rem var(--display); letter-spacing: .08em; text-transform: uppercase; }
 .cat .p { font: 700 1.55rem/1 var(--display); font-variant-numeric: tabular-nums; }
 .cat .sub { font-size: .74rem; color: var(--muted); margin-bottom: 5px; }
+.cat-fill { background: var(--elite); }
+.cat.overall { background: var(--track); border-bottom: 1px solid var(--line); }
+.cat.overall .p { font-size: 2.1rem; }
 @media (max-width: 760px) {
   .pair { grid-template-columns: 1fr; }
   .side { position: static; order: -1; }
@@ -103,7 +106,8 @@ footer p { margin: 0; }
 <div class="wrap">
   <header>
     <div>
-      <p class="back" id="back" hidden><a href="./">← All players</a></p>
+      <p class="back" id="back" hidden><a href="./">← All players</a>
+        <label class="sort" id="pseason-label" for="pseason" hidden>Season <select id="pseason"></select></label></p>
       <h1>Microstat Cards <span id="season"></span></h1>
       <p class="sub" id="sub">Ranked against every qualified skater at their position.
         A custom xG model scores every shot; Edge numbers come from NHL puck and player tracking.</p>
@@ -127,7 +131,7 @@ footer p { margin: 0; }
   <div class="legend">
     <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
     <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
-    <span>Tick = league median. A higher percentile is always better: for stats where fewer is better (penalties taken, goals and shots against on/off ice, beaten on goals against), fewer ranks higher.</span>
+    <span>Tick = league median. A higher percentile is always better: for stats where fewer is better (penalties taken, goals, xG and shots against on/off ice, beaten on goals against), fewer ranks higher.</span>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -142,10 +146,8 @@ footer p { margin: 0; }
       he's on the ice. <b>Goals against on/off ice %</b>: goals against per 60 with him on the ice as a % of his team's
       goals against per 60 with him off it, in the same games; 100 means no different and lower is better. Goals are rare,
       so it swings a lot over a few games. <b>Shots against on/off ice %</b>: the same for unblocked shot attempts
-      (Fenwick) against, at 5v5 in both views; it settles far faster than goals. <b>xGF% on/off ice (rel)</b>: his on-ice xGF% minus his team's xGF% with him off
-      the ice, in the same games, in percentage points; +5 means his team gets 5 points more of the xG with him on.
-      It's 5v5 in both views: in all situations it would mostly measure power-play vs penalty-kill time.
-      It settles much faster than the goals version. <b>Block share</b>: the share of the opponents' shot attempts with him on the
+      (Fenwick) against, at 5v5 in both views; it settles far faster than goals. <b>xG against on/off ice %</b>: the same for xG against,
+      at 5v5 in both views; it settles much faster than the goals version. <b>Block share</b>: the share of the opponents' shot attempts with him on the
       ice that he blocked, so blocks adjusted for how many shots his team gives up.
       <b>Takeaway : giveaway ratio</b>: takeaways per giveaway; a player with no giveaways yet has none.
       Scorers started logging far more giveaways and fewer takeaways in 2024-25, so this ratio ranks
@@ -158,7 +160,9 @@ footer p { margin: 0; }
     <p><b>Categories</b>: each section's stat percentiles are averaged ("avg"), and that average is then ranked like any
       other stat: every qualified player-season in the comparison pool gets the same average, and a logistic curve fitted to
       those averages (forwards and defense separately) turns his into a percentile. An average of percentiles bunches toward
-      the middle, so an average of 70 can be a 90th-percentile category.</p>
+      the middle, so an average of 70 can be a 90th-percentile category. <b>Overall</b> does the same one level up: the
+      average of his category percentiles (all but Competition, which is who he played against rather than how he
+      played), ranked by a curve fitted to every pool player-season's overall average.</p>
     <p>Not available from NHL data: passes, shot assists, zone entries and exits, entry denials, retrievals.</p>
     <p id="gt-note" hidden><b>Goal tracking</b>: from the NHL's puck and player tracking of the ~14 s before each goal, the data behind
       nhl.com's goal replays. It only exists for goals, so these count what a player did in the build-up to his team's goals:
@@ -191,6 +195,8 @@ function fmt(stat, v, mode) {
   if (stat.endsWith("_rel")) return (v > 0 ? "+" : "") + v.toFixed(1);   // percentage points
   return v.toFixed(2);   // every count stat is a rate per 60
 }
+const shown = p => Math.min(Math.max(Math.round(p), 1), 99);   // the percentile as displayed
+const byKey = (x, y) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
 const ord = n => { n = Math.min(Math.max(Math.round(n), 1), 99); const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({1:"st",2:"nd",3:"rd"})[n % 10] || "th"; return n + s; };
 const tier = p => p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
@@ -201,6 +207,16 @@ try { Object.assign(state, JSON.parse(localStorage.getItem("cards-state") || "{}
 // Per section, from the build: [title, average of its stat percentiles, number of stats, percentile of that average].
 const categories = c => c.categories[state.mode];
 
+function overall(c) {
+  const o = (c.overall || {})[state.mode];
+  if (!o) return "";
+  const [avg, n, pct] = o;
+  return `<div class="cat overall" title="Overall: ${ord(pct)} percentile; the average of his ${n} category percentiles is ${avg.toFixed(0)}">
+    <div class="top"><span class="t">Overall</span><span class="p">${ord(pct)}</span></div>
+    <div class="sub">avg of ${n} categories: ${avg.toFixed(0)}</div>
+    <span class="bar"><i class="cat-fill" style="width:${Math.max(pct, 1.5)}%"></i></span></div>`;
+}
+
 function card(c) {
   const [team, ink] = TEAMS[c.team.split("/")[0]] || ["#33414d", "#fff"];
   const m = c.modes[state.mode];
@@ -208,7 +224,7 @@ function card(c) {
     `<div class="cat" title="${esc(title)}: ${ord(pct)} percentile; the average of his ${n} stat percentile${n === 1 ? "" : "s"} is ${avg.toFixed(0)}">
       <div class="top"><span class="t">${esc(title)}</span><span class="p">${ord(pct)}</span></div>
       <div class="sub">${n === 1 ? "1 stat" : `avg of ${n} stats: ${avg.toFixed(0)}`}</div>
-      <span class="bar"><i class="${tier(pct)}" style="width:${Math.max(pct, 1.5)}%"></i></span></div>`).join("");
+      <span class="bar"><i class="cat-fill" style="width:${Math.max(pct, 1.5)}%"></i></span></div>`).join("");
   const signature = Object.entries(m).filter(([s]) => s !== DATA.headline && (!(s in EDGE_FIXED) || s === "max_skating_speed"))
     .sort((a, b) => b[1].pct - a[1].pct).slice(0, 3);
   const sections = Object.entries(DATA.sections).map(([title, stats]) => {
@@ -239,6 +255,7 @@ function card(c) {
   <aside class="card side" aria-label="${esc(c.name)} categories">
     <div class="band"><div class="name">Categories</div>
       <div class="line">${esc(c.name)} · ${state.mode === "5v5" ? "5v5" : "All situations"}</div></div>
+    ${overall(c)}
     ${cats}
   </aside></div>`;
 }
@@ -249,19 +266,45 @@ function render() {
   const sel = document.getElementById("sort");
   if (!sel.options.length) {
     sel.innerHTML = `<option value="points">Points</option>` +
-      `<optgroup label="Category">${Object.keys(DATA.sections).map(t =>
+      `<optgroup label="Category"><option value="overall">Overall</option>${Object.keys(DATA.sections).map(t =>
         `<option value="cat:${esc(t)}">${esc(t)}</option>`).join("")}</optgroup>` +
       Object.entries(DATA.sections).map(([t, ss]) => `<optgroup label="${esc(t || "Other")}">${ss.map(s =>
         `<option value="${s}">${esc(DATA.labels[s])}</option>`).join("")}</optgroup>`).join("");
   }
   sel.value = state.sort;
   if (sel.value !== state.sort) { state.sort = "points"; sel.value = "points"; }
-  const key = c => state.sort === "points" ? c.g + c.a
-    : state.sort.startsWith("cat:") ? ((categories(c).find(([t]) => t === state.sort.slice(4)) || [])[3] ?? -1)
-    : (c.modes[state.mode][state.sort] || { pct: -1 }).pct;
-  const cards = DATA.cards.filter(c => state.pos === "all" || c.group === state.pos).sort((a, b) => key(b) - key(a));
+  // Sort on the percentile as shown (1st-99th); ties go to the raw number (the category average, or the stat
+  // itself, flipped where fewer is better), then to the bigger sample (games, then minutes).
+  const key = c => [...key0(c), c.gp, c.gp * c.toi];
+  const key0 = c => {
+    if (state.sort === "points") return [c.g + c.a, c.g];
+    if (state.sort === "overall") { const o = (c.overall || {})[state.mode]; return o ? [shown(o[2]), o[0]] : [-1, -Infinity]; }
+    if (state.sort.startsWith("cat:")) {
+      const k = categories(c).find(([t]) => t === state.sort.slice(4));
+      return k ? [shown(k[3]), k[1]] : [-1, -Infinity];
+    }
+    const r = c.modes[state.mode][state.sort];
+    return r && isFinite(r.pct) ? [shown(r.pct), (DATA.lower || []).includes(state.sort) ? -r.v : r.v] : [-1, -Infinity];
+  };
+  const cards = DATA.cards.filter(c => state.pos === "all" || c.group === state.pos).sort((a, b) => byKey(key(b), key(a)));
   document.getElementById("grid").innerHTML = cards.map(card).join("");
   try { localStorage.setItem("cards-state", JSON.stringify(state)); } catch (e) {}
+}
+
+// On the website: every season this player has a card for, newest first.
+function seasonPicker(id) {
+  const here = new URLSearchParams(location.search).get("season");
+  Promise.all([fetch("data/player_seasons.json").then(r => r.json()), fetch("data/meta.json").then(r => r.json())])
+    .then(([bySeason, meta]) => {
+      const names = Object.fromEntries(meta.seasons.map(s => [String(s.season), s.name]));
+      const mine = (bySeason[String(id)] || []).map(String);
+      if (mine.length < 2) return;
+      const sel = document.getElementById("pseason");
+      sel.innerHTML = mine.map(y => `<option value="${y}">${esc(names[y] || y)}</option>`).join("");
+      sel.value = here;
+      sel.addEventListener("change", () => { location.href = `player.html?season=${sel.value}&id=${id}`; });
+      document.getElementById("pseason-label").hidden = false;
+    }).catch(() => {});
 }
 
 function start() {
@@ -269,6 +312,7 @@ const early = DATA.early;
 if (DATA.site) {
   document.getElementById("back").hidden = false;
   document.getElementById("pos-seg").hidden = document.getElementById("sort-label").hidden = true;   // one player
+  seasonPicker(DATA.cards[0].id);
   document.title = `${DATA.cards[0].name} · ${DATA.season}`;
 }
 document.getElementById("season").textContent = early ? `${DATA.season} so far` : DATA.season;

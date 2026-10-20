@@ -69,7 +69,7 @@ across every curve the worst point is now 6.1 (1,366 curves, mean 0.74).
 The fitted curve also gives sensible answers beyond the best or worst value in the pool, where a raw rank pins at 0 or 100.
 Every result also reports the raw rank (`empirical_percentile`).
 
-For stats where less is better (giveaways; penalties taken; shots, xG, high-danger xG, goals, rush and cycle shots against; goals and shots against on/off ice; DZ time; beaten on goals against) the
+For stats where less is better (giveaways; penalties taken; shots, xG, high-danger xG, goals, rush and cycle shots against; goals, xG and shots against on/off ice; DZ time; beaten on goals against) the
 percentile is flipped, so a higher percentile always means better: fewer giveaways ranks higher.
 
 ## Stats
@@ -83,7 +83,7 @@ percentile is flipped, so a higher percentile always means better: fewer giveawa
 | `rush_shots`, `cycle_shots` | individual shot attempts, classified as below |
 | `fenwick` | individual unblocked shot attempts (shot attempts minus those blocked) |
 | `fa_on_off_pct` | the same as `ga_on_off_pct` for unblocked shot attempts (Fenwick) against, at 5v5 only: his on-ice FA/60 as a % of his team's FA/60 with him off the ice, in the same games (lower is better). Fenwick rather than Corsi, so the shots he blocks don't count against him (block share credits those) |
-| `xgf_pct_rel` | his on-ice xGF% minus his team's xGF% with him off the ice, in the games he played (percentage points; higher is better). 5v5 only: in all situations it mostly measures how much power-play vs penalty-kill time he gets |
+| `xga_on_off_pct` | the same as `ga_on_off_pct` for xG: his on-ice xG against per 60 as a % of his team's with him off the ice, in the same games (lower is better). 5v5 only: in all situations it would mostly measure power-play vs penalty-kill time. It settles far faster than the goals version |
 | `block_share` | blocks as a % of the opponents' shot attempts with him on the ice, so blocks adjusted for how many shots his team allows |
 | `fenwick_for/against`, `fenwick_pct`, `xgf_pct` | on ice: unblocked attempts for and against, and the team's share of unblocked attempts and of xG while he's on the ice |
 | `blocks`, `hits` | play-by-play: shots blocked and hits thrown (hit counts vary a lot between arena scorers) |
@@ -168,6 +168,14 @@ Passes aren't counted here: primary assists and primary-assist xG already cover 
 ```
 uv run nhl-microstats goal-tracking 2023 2024 2025 2026   # download (~100 MB a season) and build; none before 2023-24
 ```
+
+## Overall rating
+
+Cards and the site rate each player in eight categories (Finishing, Play driving, Offence, Defence,
+Penalties, Speed, Competition, Physicality). A category's percentile ranks the average of its stat
+percentiles against every pool player-season's average with its own curve (forwards and defense
+separately), since an average of percentiles bunches toward 50. **Overall** does the same one level up:
+the average of the category percentiles, all but Competition (who he played against, not how he played).
 
 ## Website
 

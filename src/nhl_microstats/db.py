@@ -71,8 +71,8 @@ STATS = {
     "ga_on_off_pct":      ("Goals against on/off ice %", "on-ice", "pbp+shifts", False, False),
     # on-ice unblocked attempts against per 60 as a % of the team's with him off the ice, same games (5v5 only)
     "fa_on_off_pct":      ("Shots against on/off ice % (Fenwick)", "on-ice", "pbp+shifts", False, False),
-    # on-ice xGF% minus the team's xGF% with him off the ice, same games (percentage points; 5v5 only)
-    "xgf_pct_rel":        ("xGF% on/off ice (rel)", "on-ice", "xg-model+shifts", False, True),
+    # on-ice xG against per 60 as a % of the team's with him off the ice, same games (5v5 only)
+    "xga_on_off_pct":     ("xG against on/off ice %", "on-ice", "xg-model+shifts", False, False),
     # quality of competition: opponents' 5v5 xGF%, weighted by shared 5v5 ice time (already a %)
     "qoc_xgf_pct":        ("Quality of competition (opponents' xGF%)", "competition", "xg-model+shifts", False, True),
     # NHL Edge (all situations, season values, not counts)
