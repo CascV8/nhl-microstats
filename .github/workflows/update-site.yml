@@ -1,6 +1,8 @@
-# Every 5 minutes: pull any game the NHL has marked official, rebuild the season and
-# deploy the site to Cloudflare Pages. Runs with nothing new take about a minute and
-# deploy nothing. See docs/website.md.
+# Pull any game the NHL has marked official, rebuild the season and deploy the site to
+# Cloudflare Pages. Runs with nothing new take about a minute and deploy nothing.
+# Started every 5 minutes by the Cloudflare Worker in scheduler/ (GitHub's own schedule
+# is best-effort and runs a 5-minute cron only every few hours); the hourly schedule
+# below is a fallback in case the Worker stops. See docs/website.md.
 #
 # Needs, once:
 #   secrets CLOUDFLARE_API_TOKEN (Pages: Edit) and CLOUDFLARE_ACCOUNT_ID
@@ -11,7 +13,7 @@ name: Update site
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "23 * * * *"
   workflow_dispatch:
     inputs:
       force:

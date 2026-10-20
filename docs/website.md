@@ -78,8 +78,14 @@ Both free. `.github/workflows/update-site.yml` runs every 5 minutes on GitHub's 
   release and re-downloads the current season, which takes a few minutes.
 - **Deploys only when something changed**, and saves the cache only after a successful
   deploy, so a failed deploy is retried on the next run.
-- **Latency.** GitHub can start scheduled runs 5-30+ minutes late at busy times, so a game
-  usually reaches the site 10-40 minutes after the NHL marks it official.
+- **Who starts it.** GitHub's own schedule is best-effort: set to every 5 minutes, it ran
+  every 3-5 hours. So a Cloudflare Worker with a cron trigger (`scheduler/`, free) calls
+  GitHub's API to start the workflow every 5 minutes; the workflow's own hourly schedule
+  is a fallback. The Worker needs a fine-grained GitHub token (this repo, *Actions: Read and
+  write*) as its secret `GITHUB_TOKEN`; tokens expire, at most a year out, so renew it then.
+  Deploy changes to it with `npx wrangler deploy` in `scheduler/`.
+- **Latency.** A game reaches the site within about 5-10 minutes of the NHL marking it
+  official (the next 5-minute run, plus a couple of minutes to rebuild and deploy).
 - **Keepalive.** GitHub turns off schedules in repos with no activity for 60 days; the
   workflow pushes an empty commit when the last one is 45 days old.
 - **Run by hand:** Actions tab -> Update site -> Run workflow (tick "force" to rebuild anyway).
