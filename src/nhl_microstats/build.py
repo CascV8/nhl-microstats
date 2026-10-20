@@ -313,11 +313,12 @@ def _onice_stats(ev: pd.DataFrame, pairs: pd.DataFrame) -> pd.DataFrame:
 
 
 def _on_off_ga(goals: pd.DataFrame, by_game: pd.DataFrame, shifts: pd.DataFrame, strength: str,
-               on_ga: pd.Series, name: str = "ga_on_off_pct") -> pd.Series:
+               on_ga: pd.Series, name: str = "ga_on_off_pct", weight: str | None = None) -> pd.Series:
     """Goals against per 60 with the player on the ice, as a % of his team's goals against
     per 60 with him off the ice, in the games he played (100 = no different, lower is better).
     ``goals`` are this strength's goals; ``on_ga`` each player's on-ice goals against. Any
-    other event against works the same way (unblocked attempts for Fenwick against)."""
+    other event against works the same way (unblocked attempts for Fenwick against), and
+    ``weight`` sums a column instead of counting events (``"xg"`` for xG against)."""
     secs = "toi_5v5" if strength == "5v5" else "toi_all"
     mine = by_game.groupby(["game_id", "team", "player_id"])[secs].sum().reset_index()
     if strength == "5v5":   # five skaters a side at 5v5, so team time is skater time / 5
@@ -327,27 +328,14 @@ def _on_off_ga(goals: pd.DataFrame, by_game: pd.DataFrame, shifts: pd.DataFrame,
         team_secs = mine[["game_id", "team"]].drop_duplicates().set_index(["game_id", "team"])
         team_secs = team_secs.join(length.rename("s"), on="game_id")["s"]
     opp = goals["home_team"].where(goals["team"] != goals["home_team"], goals["away_team"])
-    team_ga = goals.groupby([goals["game_id"], opp.rename("team")]).size()
+    by = goals.groupby([goals["game_id"], opp.rename("team")])
+    team_ga = by[weight].sum() if weight else by.size()
     m = mine.join(team_secs.rename("team_secs"), on=["game_id", "team"]).join(team_ga.rename("team_ga"), on=["game_id", "team"])
     tot = m.fillna({"team_ga": 0}).groupby("player_id")[[secs, "team_secs", "team_ga"]].sum()
     on = on_ga.reindex(tot.index).fillna(0)
     off_ga, off_secs = tot["team_ga"] - on, tot["team_secs"] - tot[secs]
     ratio = 100 * (on / tot[secs]) / (off_ga / off_secs)
     return ratio[(tot[secs] > 0) & (off_ga > 0) & (off_secs > 0)].rename(name)
-
-
-def _xgf_pct_rel(ev: pd.DataFrame, by_game: pd.DataFrame, on_xgf: pd.Series, on_xga: pd.Series) -> pd.Series:
-    """His on-ice xGF% minus his team's xGF% with him off the ice, in the games he played
-    (percentage points; higher is better). ``ev`` are this strength's attempts."""
-    opp = ev["home_team"].where(ev["team"] != ev["home_team"], ev["away_team"])
-    team = pd.DataFrame({"xgf": ev.groupby(["game_id", "team"])["xg"].sum(),
-                         "xga": ev.groupby([ev["game_id"], opp.rename("team")])["xg"].sum()}).fillna(0)
-    games = by_game[["game_id", "team", "player_id"]].drop_duplicates()
-    tot = games.join(team, on=["game_id", "team"]).fillna({"xgf": 0, "xga": 0}).groupby("player_id")[["xgf", "xga"]].sum()
-    f, a = on_xgf.reindex(tot.index).fillna(0), on_xga.reindex(tot.index).fillna(0)
-    off_f, off_a = tot["xgf"] - f, tot["xga"] - a
-    rel = 100 * (f / (f + a) - off_f / (off_f + off_a))
-    return rel[(f + a > 0) & (off_f + off_a > 0)].rename("xgf_pct_rel")
 
 
 def _last_season_xgf_share(y: int) -> pd.Series | None:
@@ -404,7 +392,7 @@ def build_season(season) -> None:
         stats = stats.join(gv_xga[strength]).fillna({"giveaway_xga": 0})
         stats = stats.join(_on_off_ga(g, by_game, shifts, strength, stats["goals_against"]))
         if strength == "5v5":   # in all situations these mostly measure power-play vs penalty-kill time
-            stats = stats.join(_xgf_pct_rel(e, by_game, stats["xgf"], stats["xga"]))
+            stats = stats.join(_on_off_ga(e, by_game, shifts, strength, stats["xga"], "xga_on_off_pct", weight="xg"))
             stats = stats.join(_on_off_ga(e[e["unblocked"] == 1], by_game, shifts, strength,
                                           stats["fenwick_against"], "fa_on_off_pct"))
         # Goals per shot on goal; players without a shot on goal have no shooting %.

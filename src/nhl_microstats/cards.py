@@ -25,13 +25,17 @@ SECTIONS = {
     "Finishing": ["goals", "shooting_pct", "shot_strength"],
     "Play driving": ["primary_assists", "secondary_assists", "primary_assist_xg", "gt_possession_time", "gt_carries"],
     "Offence": ["rush_shots", "shots_on_goal", "fenwick_pct", "cycle_shots", "oz_time_pct", "gt_dekes", "gt_defenders_beaten", "ixg"],
-    "Defence": ["take_give_ratio", "blocks", "block_share", "ga_on_off_pct", "fa_on_off_pct", "xgf_pct_rel", "gt_beaten"],
+    "Defence": ["take_give_ratio", "blocks", "block_share", "ga_on_off_pct", "fa_on_off_pct", "xga_on_off_pct", "gt_beaten"],
     "Penalties": ["penalties_taken", "penalties_drawn"],
     "Speed": ["bursts_over_20mph", "max_skating_speed"],
     "Competition": ["qoc_xgf_pct"],
     "Physicality": ["hits", "hits_taken", "fights"],
 }
 # gt_* stats come from the NHL's goal tracking (2023-24 on) and are missing before then.
+# The overall rating averages every category's percentile except these (Competition is who he
+# played against, not how he played), then ranks that average with its own curve.
+OVERALL = "Overall"
+NOT_IN_OVERALL = {"Competition"}
 # The headline number at the top of each card, in the current mode.
 HEADLINE = "xgf_pct"
 MODES = {"5v5": ("5v5", True), "all": ("all", True)}   # mode -> (strength, per60)
@@ -106,10 +110,18 @@ def category_curves(vs: list[int], strength: str) -> dict[str, dict[str, curves.
                 pcts[stat] = pd.concat(ranked)
         p = pd.DataFrame(pcts).reindex(members.index)
         out[pos] = {}
+        cat_pct = {}
         for title, ss in SECTIONS.items():
-            avg = p[[s for s in ss if s in p]].mean(axis=1).dropna()
+            cols = p[[s for s in ss if s in p]]
+            avg = cols.mean(axis=1).dropna()
             if len(avg) >= curves.MIN_POOL and np.ptp(avg) > 0:
                 out[pos][title] = curves.fit(avg)
+                # Each player-season's category percentile, exactly as a card computes it.
+                n = cols.notna().sum(axis=1).loc[avg.index]
+                cat_pct[title] = pd.Series(np.where(n == 1, avg, out[pos][title](avg.to_numpy())), index=avg.index)
+        overall = pd.DataFrame({t: v for t, v in cat_pct.items() if t not in NOT_IN_OVERALL}).mean(axis=1).dropna()
+        if len(overall) >= curves.MIN_POOL and np.ptp(overall) > 0:
+            out[pos][OVERALL] = curves.fit(overall)
     return out
 
 
@@ -140,6 +152,7 @@ def card_data(players=None, season="2025", vs_season=REFERENCE) -> dict:
         tables[mode] = t[t["stat"].isin(shown)]
     ps_ = t.attrs["players"]
     labels = dict(zip(t["stat"], t["label"]))
+    defs = _defs()
     ids = [_find(ps_, p, y) for p in players] if players else list(ps_.index)
     with connect() as con:
         tot = pd.read_sql("SELECT player_id, stat, value FROM stats WHERE season = ? AND strength = 'all' "
@@ -164,12 +177,27 @@ def card_data(players=None, season="2025", vs_season=REFERENCE) -> dict:
             # Per mode: [section, average of its stat percentiles, number of stats, percentile of that average].
             "categories": {mode: _categories(m, cat_curves[mode][info["pos_group"]]) for mode, m in modes.items()},
         })
+        # Overall: the mean of the category percentiles, ranked by its own curve.
+        cards[-1]["overall"] = {mode: _overall(cats, cat_curves[mode][info["pos_group"]])
+                                for mode, cats in cards[-1]["categories"].items()}
     # Only sections with data for this season (no goal tracking before 2023-24).
     sections = {t: ss for t, ss in SECTIONS.items() if any(s in c["modes"][m] for c in cards for m in MODES for s in ss)}
     return {"season": season_name([y]), "vs_season": season_name(vs), "early": y not in vs and y > max(vs),
             "sections": sections,
             "labels": {s: labels.get(s, s) for stats in sections.values() for s in stats}, "headline": HEADLINE,
-            "min_toi": MIN_TOI, "cards": cards}
+            "min_toi": MIN_TOI,
+            # Stats where fewer is better: their raw values sort the other way when breaking ties.
+            "lower": sorted(s for s in labels if s in defs.index and not defs.loc[s, "higher_is_better"]),
+            "cards": cards}
+
+
+def _overall(cats: list, fitted: dict[str, curves.Curve]) -> list | None:
+    """[average of the category percentiles, number of categories, percentile of that average]."""
+    ps = [pct for title, _, _, pct in cats if title not in NOT_IN_OVERALL and np.isfinite(pct)]
+    if not ps or OVERALL not in fitted:
+        return None
+    avg = float(np.mean(ps))
+    return [round(avg, 1), len(ps), round(float(fitted[OVERALL](avg)), 1)]
 
 
 def _categories(m: dict, fitted: dict[str, curves.Curve]) -> list:

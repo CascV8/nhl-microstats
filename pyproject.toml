@@ -25,7 +25,7 @@ requires = ["uv_build>=0.8.15,<0.9.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-puckscrape = { path = "../puckscrape", editable = true }
+puckscrape = { git = "https://github.com/CascV8/Puckscrape.git" }
 xg-model = { path = "../xg-model", editable = true }
 
 [dependency-groups]
