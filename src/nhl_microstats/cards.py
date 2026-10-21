@@ -25,7 +25,7 @@ SECTIONS = {
     "Finishing": ["goals", "shooting_pct", "shot_strength"],
     "Play driving": ["primary_assists", "secondary_assists", "primary_assist_xg", "gt_possession_time", "gt_carries"],
     "Offence": ["rush_shots", "shots_on_goal", "fenwick_pct", "cycle_shots", "oz_time_pct", "gt_dekes", "gt_defenders_beaten", "ixg"],
-    "Defence": ["take_give_ratio", "blocks", "ga_on_off_pct", "fa_on_off_pct", "xga_on_off_pct", "gt_beaten"],
+    "Defence": ["takeaways", "blocks", "ga_on_off_pct", "fa_on_off_pct", "xga_on_off_pct", "gt_beaten"],
     "Penalties": ["penalties_taken", "penalties_drawn"],
     "Speed": ["bursts_over_20mph", "max_skating_speed"],
     "Competition": ["qoc_xgf_pct"],
