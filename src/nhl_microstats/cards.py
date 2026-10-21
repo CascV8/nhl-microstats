@@ -25,7 +25,7 @@ SECTIONS = {
     "Finishing": ["goals", "shooting_pct", "shot_strength"],
     "Play driving": ["primary_assists", "secondary_assists", "primary_assist_xg", "gt_possession_time", "gt_carries"],
     "Offence": ["rush_shots", "shots_on_goal", "fenwick_pct", "cycle_shots", "oz_time_pct", "gt_dekes", "gt_defenders_beaten", "ixg"],
-    "Defence": ["take_give_ratio", "blocks", "block_share", "ga_on_off_pct", "fa_on_off_pct", "xga_on_off_pct", "gt_beaten"],
+    "Defence": ["take_give_ratio", "blocks", "ga_on_off_pct", "fa_on_off_pct", "xga_on_off_pct", "gt_beaten"],
     "Penalties": ["penalties_taken", "penalties_drawn"],
     "Speed": ["bursts_over_20mph", "max_skating_speed"],
     "Competition": ["qoc_xgf_pct"],
@@ -33,16 +33,22 @@ SECTIONS = {
 }
 # gt_* stats come from the NHL's goal tracking (2023-24 on) and are missing before then.
 # The overall rating is a weighted average of the category percentiles, ranked with its own
-# curve. Play driving and defence count most; speed and physicality least; Competition (who
-# he played against, not how he played) not at all.
+# curve, with weights by position: forwards lean on offence, finishing and play driving;
+# defensemen on play driving, defence and offence. Speed and physicality count least.
+# Competition (who he played against) counts only for defensemen, at half weight.
 OVERALL = "Overall"
-OVERALL_WEIGHTS = {"Play driving": 3, "Defence": 3, "Offence": 2, "Finishing": 2, "Penalties": 1,
-                   "Speed": 0.5, "Physicality": 0.5, "Competition": 0}
+OVERALL_WEIGHTS = {
+    "F": {"Offence": 3, "Finishing": 3, "Play driving": 3, "Defence": 2, "Penalties": 1,
+          "Speed": 0.5, "Physicality": 0.5, "Competition": 0},
+    "D": {"Play driving": 3, "Defence": 3, "Offence": 2, "Finishing": 1, "Penalties": 1,
+          "Speed": 0.5, "Physicality": 0.5, "Competition": 0.5},
+}
 
 
-def _weighted(pcts: dict[str, float]) -> float | None:
+def _weighted(pcts: dict[str, float], pos: str) -> float | None:
     """Weighted mean of the category percentiles present (weights renormalised over them)."""
-    w = {t: OVERALL_WEIGHTS.get(t, 1) for t, p in pcts.items() if np.isfinite(p) and OVERALL_WEIGHTS.get(t, 1) > 0}
+    weights = OVERALL_WEIGHTS[pos]
+    w = {t: weights.get(t, 1) for t, p in pcts.items() if np.isfinite(p) and weights.get(t, 1) > 0}
     return sum(pcts[t] * x for t, x in w.items()) / sum(w.values()) if w else None
 # The headline number at the top of each card, in the current mode.
 HEADLINE = "xgf_pct"
@@ -128,7 +134,7 @@ def category_curves(vs: list[int], strength: str) -> dict[str, dict[str, curves.
                 n = cols.notna().sum(axis=1).loc[avg.index]
                 cat_pct[title] = pd.Series(np.where(n == 1, avg, out[pos][title](avg.to_numpy())), index=avg.index)
         cp = pd.DataFrame(cat_pct)
-        w = pd.Series({t: OVERALL_WEIGHTS.get(t, 1) for t in cp.columns})
+        w = pd.Series({t: OVERALL_WEIGHTS[pos].get(t, 1) for t in cp.columns})
         weight = cp.notna().mul(w, axis=1).sum(axis=1)       # renormalised over the categories present
         overall = (cp.fillna(0).mul(w, axis=1).sum(axis=1) / weight.where(weight > 0)).dropna()
         if len(overall) >= curves.MIN_POOL and np.ptp(overall) > 0:
@@ -189,7 +195,7 @@ def card_data(players=None, season="2025", vs_season=REFERENCE) -> dict:
             "categories": {mode: _categories(m, cat_curves[mode][info["pos_group"]]) for mode, m in modes.items()},
         })
         # Overall: the mean of the category percentiles, ranked by its own curve.
-        cards[-1]["overall"] = {mode: _overall(cats, cat_curves[mode][info["pos_group"]])
+        cards[-1]["overall"] = {mode: _overall(cats, cat_curves[mode][info["pos_group"]], info["pos_group"])
                                 for mode, cats in cards[-1]["categories"].items()}
     # Only sections with data for this season (no goal tracking before 2023-24).
     sections = {t: ss for t, ss in SECTIONS.items() if any(s in c["modes"][m] for c in cards for m in MODES for s in ss)}
@@ -202,13 +208,13 @@ def card_data(players=None, season="2025", vs_season=REFERENCE) -> dict:
             "cards": cards}
 
 
-def _overall(cats: list, fitted: dict[str, curves.Curve]) -> list | None:
+def _overall(cats: list, fitted: dict[str, curves.Curve], pos: str) -> list | None:
     """[weighted average of the category percentiles, number of categories, percentile of that average]."""
     pcts = {title: pct for title, _, _, pct in cats}
-    avg = _weighted(pcts)
+    avg = _weighted(pcts, pos)
     if avg is None or OVERALL not in fitted:
         return None
-    n = sum(1 for t, p in pcts.items() if np.isfinite(p) and OVERALL_WEIGHTS.get(t, 1) > 0)
+    n = sum(1 for t, p in pcts.items() if np.isfinite(p) and OVERALL_WEIGHTS[pos].get(t, 1) > 0)
     return [round(avg, 1), n, round(float(fitted[OVERALL](avg)), 1)]
 
 
