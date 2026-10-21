@@ -156,22 +156,14 @@ def toi_by_game(shifts: pd.DataFrame, skaters: set[int]) -> pd.DataFrame:
     return t[t["player_id"].isin(skaters)]
 
 
-# Opponents' xGF% is shrunk toward a prior (last season's xGF%, else 50%) by this much
-# xG for and against, so a player with a few minutes doesn't count as an elite or
-# terrible opponent, and early in a season opponents are rated mostly on last season.
-QOC_PRIOR_XG = 4.0
-
-
-def competition(shifts: pd.DataFrame, skaters: set[int], xgf: pd.Series, xga: pd.Series,
-                prior: pd.Series | None = None) -> pd.Series:
-    """Quality of competition: the 5v5 xGF% of the opposing skaters a player was on
-    the ice against, weighted by the 5v5 seconds they shared. ``xgf``/``xga`` are
-    each skater's on-ice 5v5 season totals; ``prior`` is a starting xGF% (0-100)
-    per skater, 50 where missing."""
+def competition(shifts: pd.DataFrame, skaters: set[int], xgf: pd.Series, xga: pd.Series) -> pd.Series:
+    """Quality of competition: the average 5v5 xGF% of the opposing skaters a player was
+    on the ice against, each at his actual season xGF%, weighted by the 5v5 seconds they
+    shared. ``xgf``/``xga`` are each skater's on-ice 5v5 season totals. An opponent with
+    no 5v5 xG either way has no xGF% and is left out."""
     ids = xgf.index.union(xga.index)
     xgf, xga = xgf.reindex(ids).fillna(0), xga.reindex(ids).fillna(0)
-    p = (prior.reindex(ids) if prior is not None else pd.Series(np.nan, index=ids)).fillna(50) / 100
-    share = 100 * (xgf + 2 * QOC_PRIOR_XG * p) / (xgf + xga + 2 * QOC_PRIOR_XG)
+    share = (100 * xgf / (xgf + xga)).where(xgf + xga > 0)
     num, den = [], []
     shifts = shifts[shifts["end_seconds"] > shifts["start_seconds"]]
     for _, s in shifts.groupby(["game_id", "period"], sort=False):
@@ -183,9 +175,10 @@ def competition(shifts: pd.DataFrame, skaters: set[int], xgf: pd.Series, xga: pd
         np.add.at(d, (idx, sk["end_seconds"].to_numpy()), -1)
         on = (np.cumsum(d, axis=1)[:, :-1] > 0) & five
         team = sk.drop_duplicates("player_id").set_index("player_id")["team_abbrev"].reindex(ids).to_numpy()
-        opp_share = share.reindex(ids).fillna(50).to_numpy()
+        opp_share = share.reindex(ids).to_numpy()
+        rated = ~np.isnan(opp_share)
         for t in np.unique(team):
-            me, them = team == t, team != t
+            me, them = team == t, (team != t) & rated
             shared = on[me].astype(float) @ on[them].T.astype(float)     # seconds together, me x them
             num.append(pd.Series(shared @ opp_share[them], index=ids[me]))
             den.append(pd.Series(shared.sum(axis=1), index=ids[me]))
@@ -338,19 +331,6 @@ def _on_off_ga(goals: pd.DataFrame, by_game: pd.DataFrame, shifts: pd.DataFrame,
     return ratio[(tot[secs] > 0) & (off_ga > 0) & (off_secs > 0)].rename(name)
 
 
-def _last_season_xgf_share(y: int) -> pd.Series | None:
-    """Each skater's 5v5 xGF% the season before ``y``, if it's in the database."""
-    if not db.DB_PATH.exists():
-        return None
-    with db.connect() as con:
-        d = pd.read_sql("SELECT player_id, stat, value FROM stats WHERE season = ? AND strength = '5v5' "
-                        "AND stat IN ('xgf', 'xga')", con, params=[y - 1])
-    if d.empty:
-        return None
-    d = d.pivot(index="player_id", columns="stat", values="value")
-    return (100 * d["xgf"] / (d["xgf"] + d["xga"])).dropna()
-
-
 def build_season(season) -> None:
     y = start_year(season)
     log.info("%d-%02d: loading", y, (y + 1) % 100)
@@ -410,7 +390,7 @@ def build_season(season) -> None:
         frames.append(long.assign(season=y, strength=strength))
     stats = pd.concat(frames, ignore_index=True)
     five = stats[(stats["strength"] == "5v5")].pivot(index="player_id", columns="stat", values="value")
-    qoc = competition(shifts, skaters, five["xgf"], five["xga"], _last_season_xgf_share(y))
+    qoc = competition(shifts, skaters, five["xgf"], five["xga"])
     stats = pd.concat([stats, pd.DataFrame({"player_id": qoc.index.astype("int64"), "stat": qoc.name, "value": qoc.to_numpy(),
                                             "season": y, "strength": "5v5"})], ignore_index=True)
 

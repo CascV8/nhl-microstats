@@ -96,7 +96,7 @@ percentile is flipped, so a higher percentile always means better: fewer giveawa
 | `shots_for/against`, `xgf/xga`, `goals_for/against` | on ice, from play-by-play matched to shift charts |
 | `rush_shots_for/against`, `cycle_shots_for/against` | on ice |
 | `ga_on_off_pct` | goals against per 60 with him on the ice, as a % of his team's goals against per 60 with him off it, in the games he played (100 = no different; lower is better). Team time at 5v5 is its skaters' 5v5 time / 5; in all situations it's the game length. Players whose team allowed no goals with them off the ice have none |
-| `qoc_xgf_pct` | quality of competition: the 5v5 xGF% of the opposing skaters he was on the ice against, weighted by shared 5v5 seconds. Each opponent's xGF% is shrunk toward last season's (or 50%) by 4 xG for and against, so early-season opponents are rated mostly on last season (5v5 only, already a %) |
+| `qoc_xgf_pct` | quality of competition: the average 5v5 xGF% of the opposing skaters he was on the ice against, each at his actual season xGF% (opponents with no 5v5 xG yet are left out), weighted by shared 5v5 seconds (5v5 only, already a %) |
 | `hd_xga` | on-ice xG against from high-danger attempts: inner slot (within 25 ft of the net, 10 ft of the middle), rebounds, quick shots off the rush |
 | `max_skating_speed`, `bursts_over_20mph`, `shot_strength` (average shot speed), `distance_skated`, `max_game_distance`, `oz/nz/dz_time_pct`, `oz_time_pct_ev` | NHL Edge (all situations) |
 

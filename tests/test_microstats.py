@@ -229,10 +229,11 @@ def test_quality_of_competition():
     assert 90 not in q.index                                # goalies aren't rated
 
 
-def test_quality_of_competition_prior():
-    # No xG yet this season: opponents are rated on the prior (last season), not 50%.
+def test_quality_of_competition_skips_unrated_opponents():
+    # Opponents with no 5v5 xG yet have no xGF%: they're left out, not counted as 50%.
     rows = [(p, "HOM", 0, 100) for p in [1, 2, 3, 4, 5, 90]] + [(p, "AWY", 0, 100) for p in [6, 7, 8, 9, 10, 91]]
     shifts = pd.DataFrame(rows, columns=["player_id", "team_abbrev", "start_seconds", "end_seconds"]).assign(game_id=1, period=1)
-    zero = pd.Series(0.0, index=range(1, 11))
-    q = build.competition(shifts, set(range(1, 11)), zero, zero, prior=pd.Series({6: 60.0}))
-    assert q.loc[1] == pytest.approx(52)                    # (60 + 4 * 50) / 5
+    xgf = pd.Series(0.0, index=range(1, 11)); xga = pd.Series(0.0, index=range(1, 11))
+    xgf[6], xga[6] = 6.0, 4.0                              # only 6 has any xG: 60%
+    q = build.competition(shifts, set(range(1, 11)), xgf, xga)
+    assert q.loc[1] == pytest.approx(60)
