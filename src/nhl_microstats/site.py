@@ -54,6 +54,14 @@ def default_seasons() -> list[int]:
                                           "ORDER BY season DESC", [FIRST_SEASON])]
 
 
+def code_hash() -> str:
+    """Changes whenever the code or templates that shape the site do."""
+    h = hashlib.sha256()
+    for name in [*CODE, TEMPLATE.name, INDEX_TEMPLATE.name]:
+        h.update(Path(__file__).with_name(name).read_bytes())
+    return h.hexdigest()
+
+
 def _stamp(y: int) -> str:
     """Changes whenever season ``y``'s exported files could: its data, the curves, or the code."""
     h = hashlib.sha256()

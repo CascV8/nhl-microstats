@@ -31,7 +31,7 @@ import pyarrow.parquet as pq
 
 from . import collect
 from .build import build_season
-from .site import OUT, default_seasons, export_site
+from .site import OUT, code_hash, default_seasons, export_site
 
 log = logging.getLogger("nhl_microstats.update")
 
@@ -40,15 +40,23 @@ SHIFT_RETRY_MINUTES = 30       # how often to re-ask for shift charts the NHL ha
 STATE = collect.DATA / "update_state.json"   # kept with the data, so it survives between CI runs
 
 
-def _last_retry() -> float:
+def _state() -> dict:
     try:
-        return float(json.loads(STATE.read_text())["last_shift_retry"])
-    except (OSError, ValueError, KeyError):
-        return 0.0
+        return json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _save(**kw) -> None:
+    STATE.write_text(json.dumps(_state() | kw))
+
+
+def _last_retry() -> float:
+    return float(_state().get("last_shift_retry", 0))
 
 
 def _retried_now() -> None:
-    STATE.write_text(json.dumps({"last_shift_retry": time.time()}))
+    _save(last_shift_retry=time.time())
 
 
 def current_season(today: dt.date | None = None) -> int:
@@ -81,6 +89,9 @@ def update_once(season=None, out=OUT, deploy: str | None = None, force: bool = F
     """One pass. Returns True if the site was rebuilt."""
     y = int(season) if season else current_season()
     folder = collect.game_dir(y)
+    if _state().get("site_code") != code_hash():   # new code or templates: re-export even with no new games
+        log.info("site code changed since the last export; rebuilding")
+        force = True
     pending = [g for g in _recent_official(y) if not (folder / f"{g}_pbp.parquet").exists()]
     retry = time.time() - _last_retry() >= SHIFT_RETRY_MINUTES * 60
     awaiting = retry and any(pq.read_metadata(p).num_rows == 0 for p in folder.glob("*_shifts.parquet"))
@@ -104,6 +115,7 @@ def update_once(season=None, out=OUT, deploy: str | None = None, force: bool = F
     collect.collect_shot_speed(y, bios["player_id"], refresh=played)
     build_season(y)
     export_site(sorted({y, *default_seasons()}, reverse=True), out)   # past seasons come from the cache
+    _save(site_code=code_hash())
     if deploy:
         log.info("deploying: %s", deploy)
         subprocess.run(deploy, shell=True, check=True)

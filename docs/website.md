@@ -59,6 +59,9 @@ Each `watch` pass (default every 5 minutes):
    in the changed games (Edge season totals grow every game), rebuild the current season,
    re-export the site, then run the `--deploy` command.
 
+**Code changes deploy themselves.** `update` keeps a hash of the site's code and templates
+with its state; when a push changes them, the next run rebuilds and deploys even with no new games.
+
 **No curve refit.** The season in progress is never part of a comparison pool, so its
 games can't move the curves. Refit (`nhl-microstats fit`) once a season completes.
 
