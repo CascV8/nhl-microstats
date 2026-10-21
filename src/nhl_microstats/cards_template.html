@@ -152,8 +152,7 @@ footer p { margin: 0; }
       goals against per 60 with him off it, in the same games; 100 means no different and lower is better. Goals are rare,
       so it swings a lot over a few games. <b>Shots against on/off ice %</b>: the same for unblocked shot attempts
       (Fenwick) against, at 5v5 in both views; it settles far faster than goals. <b>xG against on/off ice %</b>: the same for xG against,
-      at 5v5 in both views; it settles much faster than the goals version. <b>Block share</b>: the share of the opponents' shot attempts with him on the
-      ice that he blocked, so blocks adjusted for how many shots his team gives up.
+      at 5v5 in both views; it settles much faster than the goals version.
       <b>Takeaway : giveaway ratio</b>: takeaways per giveaway; a player with no giveaways yet has none.
       Scorers started logging far more giveaways and fewer takeaways in 2024-25, so this ratio ranks
       each season against its own season, and a season in progress against the latest complete one.
@@ -166,9 +165,10 @@ footer p { margin: 0; }
       other stat: every qualified player-season in the comparison pool gets the same average, and a logistic curve fitted to
       those averages (forwards and defense separately) turns his into a percentile. An average of percentiles bunches toward
       the middle, so an average of 70 can be a 90th-percentile category. <b>Overall</b> does the same one level up: a
-      weighted average of his category percentiles (Play driving and Defence ×3, Offence and Finishing ×2, Penalties ×1,
-      Speed and Physicality ×½; Competition, which is who he played against rather than how he played, isn't counted),
-      ranked by a curve fitted to every pool player-season's weighted average.</p>
+      weighted average of his category percentiles, ranked by a curve fitted to every pool player-season's weighted
+      average. Forwards: Offence, Finishing and Play driving ×3, Defence ×2, Penalties ×1, Speed and Physicality ×½.
+      Defensemen: Play driving and Defence ×3, Offence ×2, Finishing and Penalties ×1, Speed, Physicality and
+      Competition ×½. Competition (who he played against) doesn't count for forwards.</p>
     <p>Not available from NHL data: passes, shot assists, zone entries and exits, entry denials, retrievals.</p>
     <p id="gt-note" hidden><b>Goal tracking</b>: from the NHL's puck and player tracking of the ~14 s before each goal, the data behind
       nhl.com's goal replays. It only exists for goals, so these count what a player did in the build-up to his team's goals:
@@ -196,7 +196,7 @@ const POS = { C: "Centre", L: "Left wing", R: "Right wing", D: "Defense" };
 const EDGE_FIXED = { max_skating_speed: " mph", shot_strength: " mph", oz_time_pct: "%" };
 function fmt(stat, v, mode) {
   if (stat in EDGE_FIXED) return v.toFixed(1) + EDGE_FIXED[stat];
-  if (stat.endsWith("_pct") || stat === "block_share") return v.toFixed(1) + "%";
+  if (stat.endsWith("_pct")) return v.toFixed(1) + "%";
   if (stat === "take_give_ratio") return v.toFixed(2) + " : 1";
   if (stat.endsWith("_rel")) return (v > 0 ? "+" : "") + v.toFixed(1);   // percentage points
   return v.toFixed(2);   // every count stat is a rate per 60
@@ -281,7 +281,9 @@ function render() {
   if (sel.value !== state.sort) { state.sort = "points"; sel.value = "points"; }
   // Sort on the percentile as shown (1st-99th); ties go to the raw number (the category average, or the stat
   // itself, flipped where fewer is better), then to the bigger sample (games, then minutes).
-  const key = c => [...key0(c), c.gp, c.gp * c.toi];
+  // Ties on the shown percentile go first to points per game, then the raw number, then sample size.
+  const key = c => { const k = key0(c); return state.sort === "points" ? [...k, c.gp, c.gp * c.toi]
+    : [k[0], (c.g + c.a) / Math.max(c.gp, 1), ...k.slice(1), c.gp, c.gp * c.toi]; };
   const key0 = c => {
     if (state.sort === "points") return [c.g + c.a, c.g];
     if (state.sort === "overall") { const o = (c.overall || {})[state.mode]; return o ? [shown(o[2]), o[0]] : [-1, -Infinity]; }
