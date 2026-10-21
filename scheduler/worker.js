@@ -9,18 +9,32 @@
 const REPO = "CascV8/nhl-microstats";
 const WORKFLOW = "update-site.yml";
 
+// A pasted secret often picks up a trailing newline or space, or quotes around it.
+const clean = t => String(t ?? "").trim().replace(/^["']|["']$/g, "").trim();
+
+// What the saved token looks like, without revealing it: enough to spot a bad paste.
+function shape(t) {
+  const kind = t.startsWith("github_pat_") ? "fine-grained (github_pat_)" : t.startsWith("ghp_") ? "classic (ghp_)"
+    : t ? `unrecognized start "${t.slice(0, 3)}…"` : "EMPTY";
+  return `${kind}, ${t.length} characters${/\s/.test(t) ? ", contains whitespace" : ""}`;
+}
+
 async function dispatch(env) {
+  const token = clean(env.GITHUB_TOKEN);
   const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "nhl-microstats-scheduler",
     },
     body: JSON.stringify({ ref: "main" }),
   });
-  if (res.status !== 204) throw new Error(`GitHub answered ${res.status}: ${await res.text()}`);
+  if (res.status !== 204) {
+    throw new Error(`GitHub answered ${res.status} (saved token: ${shape(token)}): ${await res.text()}`);
+  }
+  console.log(`started ${WORKFLOW}`);
 }
 
 export default {

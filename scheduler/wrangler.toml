@@ -2,6 +2,7 @@ name = "nhl-microstats-scheduler"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = false   # it only runs on the cron below; no public URL needed
+preview_urls = false
 
 [triggers]
 crons = ["*/5 * * * *"]
