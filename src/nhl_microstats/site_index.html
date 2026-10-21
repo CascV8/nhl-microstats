@@ -53,14 +53,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .note b { color: var(--accent); }
 
 .table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+/* Sized to its content rather than stretched across the page; the percentile columns all share one width. */
+table { border-collapse: collapse; width: auto; font-size: .88rem; font-variant-numeric: tabular-nums; }
+th.c, td.c { width: 5.4em; min-width: 5.4em; text-align: center; }
+th.c { white-space: normal; line-height: 1.15; vertical-align: bottom; }
 th { font: 600 .74rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
-  text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer;
+  text-align: right; padding: 9px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer;
   position: sticky; top: 0; background: var(--surface); }
 th[aria-sort] { color: var(--ink); }
 th[aria-sort="descending"]::after { content: " ▾"; } th[aria-sort="ascending"]::after { content: " ▴"; }
 th.l, td.l { text-align: left; }
-td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 7px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--track); }
 td a { color: var(--ink); font-weight: 600; text-decoration: none; }
@@ -110,7 +113,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
   <div class="legend">
     <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
     <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
-    <span>Overall averages the category percentiles (all but Competition) and ranks that average with its own curve. Category percentiles rank each player against every qualified player-season at his position from the comparison seasons. Click a player for his full card.</span>
+    <span>Overall is a weighted average of the category percentiles (Play driving and Defence count most, Speed and Physicality least, Competition not at all), ranked with its own curve. Category percentiles rank each player against every qualified player-season at his position from the comparison seasons. Click a player for his full card.</span>
   </div>
   <footer id="foot"></footer>
 </div>
@@ -139,12 +142,10 @@ const cols = () => [
   { key: "gp", label: "GP", get: r => r.gp, cell: r => r.gp },
   { key: "toi", label: "TOI/GP", get: r => r.toi, cell: r => r.toi.toFixed(1) },
   { key: "p", label: "P", get: r => [r.g + r.a, r.g, ...sample(r)], cell: r => `${r.g + r.a} <span class="dim">(${r.g}G)</span>` },
-  { key: "xgf", label: "xGF%", get: r => { const x = r.modes[state.mode].xgf; return x ? [shown(x[1]), x[0], ...sample(r)] : [-1, -Infinity, 0, 0]; },
-    cell: r => { const x = r.modes[state.mode].xgf; return x ? `${x[0].toFixed(1)} ${pctCell(x[1])}` : `<span class="dim">–</span>`; } },
-  { key: "overall", label: "Overall",
+  { key: "overall", label: "Overall", cls: "c",
     get: r => { const o = r.modes[state.mode].overall; return o ? [shown(o[0]), o[1], ...sample(r)] : [-1, -Infinity, 0, 0]; },
     cell: r => pctCell((r.modes[state.mode].overall || [])[0]) },
-  ...CATS.map(t => ({ key: "cat:" + t, label: t,
+  ...CATS.map(t => ({ key: "cat:" + t, label: t, cls: "c",
     get: r => { const c = r.modes[state.mode].cats[t]; return c ? [shown(c[0]), c[1], ...sample(r)] : [-1, -Infinity, 0, 0]; },
     cell: r => pctCell((r.modes[state.mode].cats[t] || [])[0]) })),
 ];

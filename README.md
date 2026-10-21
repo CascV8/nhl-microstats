@@ -174,8 +174,10 @@ uv run nhl-microstats goal-tracking 2023 2024 2025 2026   # download (~100 MB a 
 Cards and the site rate each player in eight categories (Finishing, Play driving, Offence, Defence,
 Penalties, Speed, Competition, Physicality). A category's percentile ranks the average of its stat
 percentiles against every pool player-season's average with its own curve (forwards and defense
-separately), since an average of percentiles bunches toward 50. **Overall** does the same one level up:
-the average of the category percentiles, all but Competition (who he played against, not how he played).
+separately), since an average of percentiles bunches toward 50. **Overall** does the same one level up,
+on a weighted average of the category percentiles: Play driving and Defence ×3, Offence and Finishing ×2,
+Penalties ×1, Speed and Physicality ×½, and Competition (who he played against, not how he played) ×0.
+The weights are `OVERALL_WEIGHTS` in `cards.py`.
 
 ## Website
 

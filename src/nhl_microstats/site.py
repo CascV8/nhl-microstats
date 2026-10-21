@@ -93,10 +93,8 @@ def _index_row(c: dict) -> dict:
     """The few numbers the directory shows, per mode."""
     modes = {}
     for mode in MODES:
-        h = c["modes"][mode].get("xgf_pct")
         o = (c.get("overall") or {}).get(mode)
-        modes[mode] = {"xgf": [h["v"], h["pct"]] if h else None,
-                       "overall": [o[2], o[0]] if o else None,
+        modes[mode] = {"overall": [o[2], o[0]] if o else None,
                        "cats": {title: [pct, avg] for title, avg, _, pct in c["categories"][mode]}}
     return {"id": c["id"], "name": c["name"], "team": c["team"], "pos": c["position"], "group": c["group"],
             "gp": c["gp"], "toi": c["toi"], "g": c["g"], "a": c["a"], "modes": modes}

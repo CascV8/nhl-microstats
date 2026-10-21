@@ -55,14 +55,19 @@ select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surfa
 .side { position: sticky; top: 12px; }
 .side .band { grid-template-columns: 1fr; }
 .side .band .name { font-size: 1.15rem; }
-.cat { padding: 8px 14px 9px; }
-.cat + .cat { border-top: 1px dashed var(--line); }
+/* Each category is its own rounded box, tinted and outlined in its tier's colour. */
+.cat { padding: 8px 12px 9px; margin: 8px 10px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tc, var(--avg)) 45%, var(--line));
+  background: color-mix(in srgb, var(--tc, var(--avg)) 10%, var(--surface)); }
+.cat:last-child { margin-bottom: 10px; }
+.cat[data-tier="t-elite"] { --tc: var(--elite); } .cat[data-tier="t-good"] { --tc: var(--good); }
+.cat[data-tier="t-avg"] { --tc: var(--avg); } .cat[data-tier="t-weak"] { --tc: var(--weak); }
 .cat .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .cat .t { font: 600 .84rem var(--display); letter-spacing: .08em; text-transform: uppercase; }
 .cat .p { font: 700 1.55rem/1 var(--display); font-variant-numeric: tabular-nums; }
 .cat .sub { font-size: .74rem; color: var(--muted); margin-bottom: 5px; }
 .cat-fill { background: var(--elite); }
-.cat.overall { background: var(--track); border-bottom: 1px solid var(--line); }
+.cat.overall { border-width: 2px; }
 .cat.overall .p { font-size: 2.1rem; }
 @media (max-width: 760px) {
   .pair { grid-template-columns: 1fr; }
@@ -160,9 +165,10 @@ footer p { margin: 0; }
     <p><b>Categories</b>: each section's stat percentiles are averaged ("avg"), and that average is then ranked like any
       other stat: every qualified player-season in the comparison pool gets the same average, and a logistic curve fitted to
       those averages (forwards and defense separately) turns his into a percentile. An average of percentiles bunches toward
-      the middle, so an average of 70 can be a 90th-percentile category. <b>Overall</b> does the same one level up: the
-      average of his category percentiles (all but Competition, which is who he played against rather than how he
-      played), ranked by a curve fitted to every pool player-season's overall average.</p>
+      the middle, so an average of 70 can be a 90th-percentile category. <b>Overall</b> does the same one level up: a
+      weighted average of his category percentiles (Play driving and Defence ×3, Offence and Finishing ×2, Penalties ×1,
+      Speed and Physicality ×½; Competition, which is who he played against rather than how he played, isn't counted),
+      ranked by a curve fitted to every pool player-season's weighted average.</p>
     <p>Not available from NHL data: passes, shot assists, zone entries and exits, entry denials, retrievals.</p>
     <p id="gt-note" hidden><b>Goal tracking</b>: from the NHL's puck and player tracking of the ~14 s before each goal, the data behind
       nhl.com's goal replays. It only exists for goals, so these count what a player did in the build-up to his team's goals:
@@ -211,9 +217,9 @@ function overall(c) {
   const o = (c.overall || {})[state.mode];
   if (!o) return "";
   const [avg, n, pct] = o;
-  return `<div class="cat overall" title="Overall: ${ord(pct)} percentile; the average of his ${n} category percentiles is ${avg.toFixed(0)}">
+  return `<div class="cat overall" data-tier="${tier(pct)}" title="Overall: ${ord(pct)} percentile; the weighted average of his ${n} category percentiles is ${avg.toFixed(0)}">
     <div class="top"><span class="t">Overall</span><span class="p">${ord(pct)}</span></div>
-    <div class="sub">avg of ${n} categories: ${avg.toFixed(0)}</div>
+    <div class="sub">weighted avg of ${n} categories: ${avg.toFixed(0)}</div>
     <span class="bar"><i class="cat-fill" style="width:${Math.max(pct, 1.5)}%"></i></span></div>`;
 }
 
@@ -221,7 +227,7 @@ function card(c) {
   const [team, ink] = TEAMS[c.team.split("/")[0]] || ["#33414d", "#fff"];
   const m = c.modes[state.mode];
   const cats = categories(c).map(([title, avg, n, pct]) =>
-    `<div class="cat" title="${esc(title)}: ${ord(pct)} percentile; the average of his ${n} stat percentile${n === 1 ? "" : "s"} is ${avg.toFixed(0)}">
+    `<div class="cat" data-tier="${tier(pct)}" title="${esc(title)}: ${ord(pct)} percentile; the average of his ${n} stat percentile${n === 1 ? "" : "s"} is ${avg.toFixed(0)}">
       <div class="top"><span class="t">${esc(title)}</span><span class="p">${ord(pct)}</span></div>
       <div class="sub">${n === 1 ? "1 stat" : `avg of ${n} stats: ${avg.toFixed(0)}`}</div>
       <span class="bar"><i class="cat-fill" style="width:${Math.max(pct, 1.5)}%"></i></span></div>`).join("");
