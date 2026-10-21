@@ -32,10 +32,18 @@ SECTIONS = {
     "Physicality": ["hits", "hits_taken", "fights"],
 }
 # gt_* stats come from the NHL's goal tracking (2023-24 on) and are missing before then.
-# The overall rating averages every category's percentile except these (Competition is who he
-# played against, not how he played), then ranks that average with its own curve.
+# The overall rating is a weighted average of the category percentiles, ranked with its own
+# curve. Play driving and defence count most; speed and physicality least; Competition (who
+# he played against, not how he played) not at all.
 OVERALL = "Overall"
-NOT_IN_OVERALL = {"Competition"}
+OVERALL_WEIGHTS = {"Play driving": 3, "Defence": 3, "Offence": 2, "Finishing": 2, "Penalties": 1,
+                   "Speed": 0.5, "Physicality": 0.5, "Competition": 0}
+
+
+def _weighted(pcts: dict[str, float]) -> float | None:
+    """Weighted mean of the category percentiles present (weights renormalised over them)."""
+    w = {t: OVERALL_WEIGHTS.get(t, 1) for t, p in pcts.items() if np.isfinite(p) and OVERALL_WEIGHTS.get(t, 1) > 0}
+    return sum(pcts[t] * x for t, x in w.items()) / sum(w.values()) if w else None
 # The headline number at the top of each card, in the current mode.
 HEADLINE = "xgf_pct"
 MODES = {"5v5": ("5v5", True), "all": ("all", True)}   # mode -> (strength, per60)
@@ -119,7 +127,10 @@ def category_curves(vs: list[int], strength: str) -> dict[str, dict[str, curves.
                 # Each player-season's category percentile, exactly as a card computes it.
                 n = cols.notna().sum(axis=1).loc[avg.index]
                 cat_pct[title] = pd.Series(np.where(n == 1, avg, out[pos][title](avg.to_numpy())), index=avg.index)
-        overall = pd.DataFrame({t: v for t, v in cat_pct.items() if t not in NOT_IN_OVERALL}).mean(axis=1).dropna()
+        cp = pd.DataFrame(cat_pct)
+        w = pd.Series({t: OVERALL_WEIGHTS.get(t, 1) for t in cp.columns})
+        weight = cp.notna().mul(w, axis=1).sum(axis=1)       # renormalised over the categories present
+        overall = (cp.fillna(0).mul(w, axis=1).sum(axis=1) / weight.where(weight > 0)).dropna()
         if len(overall) >= curves.MIN_POOL and np.ptp(overall) > 0:
             out[pos][OVERALL] = curves.fit(overall)
     return out
@@ -192,12 +203,13 @@ def card_data(players=None, season="2025", vs_season=REFERENCE) -> dict:
 
 
 def _overall(cats: list, fitted: dict[str, curves.Curve]) -> list | None:
-    """[average of the category percentiles, number of categories, percentile of that average]."""
-    ps = [pct for title, _, _, pct in cats if title not in NOT_IN_OVERALL and np.isfinite(pct)]
-    if not ps or OVERALL not in fitted:
+    """[weighted average of the category percentiles, number of categories, percentile of that average]."""
+    pcts = {title: pct for title, _, _, pct in cats}
+    avg = _weighted(pcts)
+    if avg is None or OVERALL not in fitted:
         return None
-    avg = float(np.mean(ps))
-    return [round(avg, 1), len(ps), round(float(fitted[OVERALL](avg)), 1)]
+    n = sum(1 for t, p in pcts.items() if np.isfinite(p) and OVERALL_WEIGHTS.get(t, 1) > 0)
+    return [round(avg, 1), n, round(float(fitted[OVERALL](avg)), 1)]
 
 
 def _categories(m: dict, fitted: dict[str, curves.Curve]) -> list:
