@@ -82,13 +82,15 @@ select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surfa
 .band .tag b { display: block; font-size: 1.5rem; line-height: 1; letter-spacing: .02em; }
 .band .line { font: 600 .82rem var(--body); letter-spacing: .02em; opacity: .9; font-variant-numeric: tabular-nums; }
 
-.head { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.head { display: grid; grid-template-columns: auto 1fr 1fr; gap: 12px; align-items: start; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+@media (max-width: 520px) { .head { grid-template-columns: auto 1fr; } .head > div:nth-child(3) { grid-column: 2; } }
 .big { font: 700 2.5rem/1 var(--display); font-variant-numeric: tabular-nums; }
 .big small { font-size: 1.1rem; }
 .head .cap { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .chip { font: 600 .74rem/1.2 var(--body); padding: 4px 7px; border-radius: 999px; background: var(--track); color: var(--ink); }
 .chip b { color: var(--elite); }
+.chip.worst b { color: var(--weak); }
 
 section { padding: 8px 14px 10px; }
 section + section { border-top: 1px dashed var(--line); }
@@ -136,7 +138,7 @@ footer p { margin: 0; }
   <div class="legend">
     <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
     <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
-    <span>Tick = league median. A higher percentile is always better: for stats where fewer is better (penalties taken, goals, xG and shots against on/off ice, beaten on goals against), fewer ranks higher.</span>
+    <span>Tick = league median. A higher percentile is always better: for stats where fewer is better (penalties taken, goals and xG against on/off ice, beaten on goals against), fewer ranks higher.</span>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -146,12 +148,11 @@ footer p { margin: 0; }
     <p><b>Rush</b>: the puck was recorded outside the attacking zone in the previous 8 s with no faceoff since.
       The NHL logs no zone entries, so play-by-play only catches about 6% of attempts as rush (video tracking finds 20–30%).
       Rush percentiles rest on small counts. <b>Cycle</b>: 10+ s of in-zone play since the last exit or faceoff, not a rebound or rush.</p>
-    <p>Most on-ice results (shots, xG and goals for and against while he's on the ice) are left off, with five exceptions.
+    <p>Most on-ice results (shots, xG and goals for and against while he's on the ice) are left off, with four exceptions.
       <b>xGF%</b> (the headline number) and <b>Fenwick %</b>: his team's share of xG and of unblocked shot attempts while
       he's on the ice. <b>Goals against on/off ice %</b>: goals against per 60 with him on the ice as a % of his team's
       goals against per 60 with him off it, in the same games; 100 means no different and lower is better. Goals are rare,
-      so it swings a lot over a few games. <b>Shots against on/off ice %</b>: the same for unblocked shot attempts
-      (Fenwick) against, at 5v5 in both views; it settles far faster than goals. <b>xG against on/off ice %</b>: the same for xG against,
+      so it swings a lot over a few games. <b>xG against on/off ice %</b>: the same for xG against,
       at 5v5 in both views; it settles much faster than the goals version.
       <b>Takeaways</b>: scorers started logging far fewer takeaways in 2024-25, so takeaways rank each season
       against its own season, and a season in progress against the latest complete one.
@@ -230,8 +231,11 @@ function card(c) {
       <div class="top"><span class="t">${esc(title)}</span><span class="p">${ord(pct)}</span></div>
       <div class="sub">${n === 1 ? "1 stat" : `avg of ${n} stats: ${avg.toFixed(0)}`}</div>
       <span class="bar"><i class="cat-fill" style="width:${Math.max(pct, 1.5)}%"></i></span></div>`).join("");
-  const signature = Object.entries(m).filter(([s]) => s !== DATA.headline && (!(s in EDGE_FIXED) || s === "max_skating_speed"))
-    .sort((a, b) => b[1].pct - a[1].pct).slice(0, 3);
+  const marks = Object.entries(m).filter(([s, r]) => s !== DATA.headline && isFinite(r.pct)
+    && (!(s in EDGE_FIXED) || s === "max_skating_speed")).sort((a, b) => b[1].pct - a[1].pct);
+  const signature = marks.slice(0, 3), weakest = marks.slice(-3).reverse();
+  const chips = (list, cls) => list.map(([s, r]) =>
+    `<span class="chip ${cls}"><b>${ord(r.pct)}</b> ${esc(DATA.labels[s])}</span>`).join("");
   const sections = Object.entries(DATA.sections).map(([title, stats]) => {
     const rows = stats.filter(s => m[s]).map(s => {
       const r = m[s];
@@ -252,8 +256,8 @@ function card(c) {
     <div class="head">
       <div>${m[DATA.headline] ? `<div class="big">${m[DATA.headline].v.toFixed(1)}<small>%</small></div>
         <div class="cap">${state.mode === "5v5" ? "5v5" : "All-sit"} xGF% · ${ord(m[DATA.headline].pct)}</div>` : ""}</div>
-      <div><div class="cap">Best marks</div><div class="chips">${signature.map(([s, r]) =>
-        `<span class="chip"><b>${ord(r.pct)}</b> ${esc(DATA.labels[s])}</span>`).join("")}</div></div>
+      <div><div class="cap">Best marks</div><div class="chips">${chips(signature, "best")}</div></div>
+      <div><div class="cap">Worst marks</div><div class="chips">${chips(weakest, "worst")}</div></div>
     </div>
     ${sections}
   </article>
