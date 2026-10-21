@@ -55,15 +55,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
 /* Sized to its content rather than stretched across the page; the percentile columns all share one width. */
 table { border-collapse: collapse; width: auto; font-size: .88rem; font-variant-numeric: tabular-nums; }
-th.c, td.c { width: 4.6em; min-width: 4.6em; text-align: center; padding-inline: 4px; }
+th.c, td.c { width: 3.6em; min-width: 3.6em; text-align: center; padding-inline: 3px; }
 th.c { white-space: normal; line-height: 1.15; vertical-align: bottom; letter-spacing: .04em; }
 th { font: 600 .74rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
-  text-align: right; padding: 9px 5px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer;
+  text-align: right; padding: 9px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer;
   position: sticky; top: 0; background: var(--surface); }
 th[aria-sort] { color: var(--ink); }
 th[aria-sort="descending"]::after { content: " ▾"; } th[aria-sort="ascending"]::after { content: " ▴"; }
 th.l, td.l { text-align: left; }
-td { padding: 6px 5px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--track); }
 td a { color: var(--ink); font-weight: 600; text-decoration: none; }
@@ -113,6 +113,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
   <div class="legend">
     <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
     <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
+    <span>Ovr = Overall, Fin = Finishing, PD = Play driving, Off = Offence, Def = Defence, Pen = Penalties, Spd = Speed, Comp = Competition, Phys = Physicality.</span>
     <span>Overall is a weighted average of the category percentiles, ranked with its own curve: forwards weight Offence, Finishing and Play driving most; defensemen Play driving, Defence and Offence. Speed and Physicality count least. Ties on a percentile sort by points per game. Category percentiles rank each player against every qualified player-season at his position from the comparison seasons. Click a player for his full card.</span>
   </div>
   <footer id="foot"></footer>
@@ -124,6 +125,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", "
 const tier = p => p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
 const shown = p => Math.min(Math.max(Math.round(p), 1), 99);   // the percentile as displayed
 // Sort keys are [percentile as shown, raw value]: ties on the shown percentile go to the raw number.
+// Short column headers so the percentile columns can sit close together; the full name is the tooltip.
+const SHORT = { "Finishing": "Fin", "Play driving": "PD", "Offence": "Off", "Defence": "Def", "Penalties": "Pen",
+  "Speed": "Spd", "Competition": "Comp", "Physicality": "Phys" };
 const ppg = r => (r.g + r.a) / Math.max(r.gp, 1);   // first tie-breaker on a shown percentile
 const sample = r => [r.gp, r.gp * r.toi];   // the last tie-breakers: bigger sample first
 const byKey = (x, y) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
@@ -143,10 +147,10 @@ const cols = () => [
   { key: "gp", label: "GP", get: r => r.gp, cell: r => r.gp },
   { key: "toi", label: "TOI/GP", get: r => r.toi, cell: r => r.toi.toFixed(1) },
   { key: "p", label: "P", get: r => [r.g + r.a, r.g, ...sample(r)], cell: r => `${r.g + r.a} <span class="dim">(${r.g}G)</span>` },
-  { key: "overall", label: "Overall", cls: "c",
+  { key: "overall", label: "Ovr", full: "Overall", cls: "c",
     get: r => { const o = r.modes[state.mode].overall; return o ? [shown(o[0]), ppg(r), o[1], ...sample(r)] : [-1, 0, -Infinity, 0, 0]; },
     cell: r => pctCell((r.modes[state.mode].overall || [])[0]) },
-  ...CATS.map(t => ({ key: "cat:" + t, label: t, cls: "c",
+  ...CATS.map(t => ({ key: "cat:" + t, label: SHORT[t] || t, full: t, cls: "c",
     get: r => { const c = r.modes[state.mode].cats[t]; return c ? [shown(c[0]), ppg(r), c[1], ...sample(r)] : [-1, 0, -Infinity, 0, 0]; },
     cell: r => pctCell((r.modes[state.mode].cats[t] || [])[0]) })),
 ];
@@ -155,7 +159,7 @@ function render() {
   for (const b of document.querySelectorAll("[data-pos]")) b.setAttribute("aria-pressed", b.dataset.pos === state.pos);
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", b.dataset.mode === state.mode);
   const c = cols(), col = c.find(x => x.key === state.sort) || c[5];
-  $("head").innerHTML = c.map(x => `<th class="${x.cls || ""}" data-key="${x.key}" scope="col"
+  $("head").innerHTML = c.map(x => `<th class="${x.cls || ""}" data-key="${x.key}" scope="col"${x.full ? ` title="${esc(x.full)}"` : ""}
     ${x.key === col.key ? `aria-sort="${state.dir < 0 ? "descending" : "ascending"}"` : ""}>${esc(x.label)}</th>`).join("");
   const q = state.q.trim().toLowerCase();
   const rows = DATA.rows.filter(r => (state.pos === "all" || r.group === state.pos) && r.gp >= state.mingp
