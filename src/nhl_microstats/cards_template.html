@@ -113,7 +113,7 @@ footer p { margin: 0; }
 <div class="wrap">
   <header>
     <div>
-      <p class="back" id="back" hidden><a href="./">← All players</a>
+      <p class="back" id="back" hidden><a href="microstats.html">← All players</a> <a href="./">Home</a>
         <label class="sort" id="pseason-label" for="pseason" hidden>Season <select id="pseason"></select></label></p>
       <h1>Microstat Cards <span id="season"></span></h1>
       <p class="sub" id="sub">Ranked against every qualified skater at their position.
@@ -358,6 +358,6 @@ else {
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(d => { DATA = d; start(); })
     .catch(() => { document.getElementById("grid").innerHTML =
-      `<p class="note">No card for that player and season. <a href="./">Back to all players</a></p>`; });
+      `<p class="note">No card for that player and season. <a href="microstats.html">Back to all players</a></p>`; });
 }
 </script>

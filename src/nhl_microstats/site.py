@@ -6,7 +6,8 @@ per skater that reuses the card. No server; any static host can serve ``site/``.
 
 Layout of the output:
 
-    index.html                  player directory and leaderboards
+    index.html                  home page: a choice between the microstats and the NHLe prospect cards
+    microstats.html             player directory and leaderboards
     player.html                 the card, loaded from ?season=YYYY&id=NNN
     data/meta.json              seasons, when it was built, games included, games awaiting shift charts
     data/player_seasons.json    {player id: [seasons with a card]}, for the player page's season picker
@@ -38,6 +39,7 @@ from .percentile import complete_seasons, season_name
 log = logging.getLogger("nhl_microstats.site")
 
 INDEX_TEMPLATE = Path(__file__).with_name("site_index.html")
+HOME_TEMPLATE = Path(__file__).with_name("site_home.html")
 OUT = collect.ROOT / "site"
 CACHE = collect.DATA / "site_cache"
 # What a season's exported files depend on, besides its own rows: the code and the curves.
@@ -57,7 +59,7 @@ def default_seasons() -> list[int]:
 def code_hash() -> str:
     """Changes whenever the code or templates that shape the site do."""
     h = hashlib.sha256()
-    for name in [*CODE, TEMPLATE.name, INDEX_TEMPLATE.name]:
+    for name in [*CODE, TEMPLATE.name, INDEX_TEMPLATE.name, HOME_TEMPLATE.name]:
         h.update(Path(__file__).with_name(name).read_bytes())
     return h.hexdigest()
 
@@ -143,7 +145,8 @@ def export_site(seasons=None, out: Path | str = OUT) -> Path:
     for pid, y in rows:
         by_player.setdefault(str(pid), []).append(y)
     (tmp / "data" / "player_seasons.json").write_text(json.dumps(by_player), encoding="utf-8")
-    shutil.copy(INDEX_TEMPLATE, tmp / "index.html")
+    shutil.copy(HOME_TEMPLATE, tmp / "index.html")
+    shutil.copy(INDEX_TEMPLATE, tmp / "microstats.html")
     # The card template is a fragment (cards.html gets wrapped by whatever shows it); give it a document head.
     head = '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     (tmp / "player.html").write_text(head + TEMPLATE.read_text(encoding="utf-8").replace(
