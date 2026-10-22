@@ -11,16 +11,19 @@
 /* Same tokens as the microstats index and the NHLe cards. The home page is a choice between the two. */
 :root {
   --bg: #e9eef2; --surface: #ffffff; --ink: #0f1a24; --muted: #566573; --line: #d3dce3; --track: #e3e9ee;
-  --accent: #b3122e; --elite: #1747c9; --star: #ffc400; --nhler: #00c01e;
+  --accent: #b3122e; --star: #ffc400; --nhler: #00c01e; --bust: #d9d9d9;
+  --elite: #1747c9; --good: #4f86e8; --avg: #a3afba; --weak: #dc5b34;
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --elite: #6f9cff; --star: #f2bb18; --nhler: #1fb83a; color-scheme: dark } }
+  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a; --bust: #34424f;
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --elite: #6f9cff; --star: #f2bb18; --nhler: #1fb83a; color-scheme: dark }
+  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a; --bust: #34424f;
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark }
 
 * { box-sizing: border-box }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body); }
@@ -45,7 +48,11 @@ h1 span { color: var(--accent); }
 
 /* Small previews of what's behind each door: percentile chips, and an outcome bar. */
 .chips { display: flex; gap: 5px; flex-wrap: wrap; }
-.chips i { font: 700 .82rem/1 var(--display); font-style: normal; color: #fff; padding: 5px 7px; border-radius: 4px; }
+/* The chips use the microstats table's tiers and colours (site_index.html), so they look exactly like real cells. */
+.chips i { font: 700 .86rem/1 var(--display); font-style: normal; color: #fff; padding: 4px 6px; border-radius: 4px;
+  min-width: 2.4em; text-align: center; }
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg); color: var(--ink) }
+.t-weak { background: var(--weak) }
 .bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; max-width: 320px; }
 .bar i { display: block; }
 footer { margin-top: 36px; color: var(--muted); font-size: .86rem; }
@@ -63,7 +70,7 @@ footer { margin-top: 36px; color: var(--muted); font-size: .86rem; }
       <p>Every skater's season as percentiles against their position: finishing, play driving, offence, defence, speed
         and more, from a custom xG model and NHL tracking. Updated after every game.</p>
       <span class="chips" aria-hidden="true">
-        <i style="background:#1747c9">94</i><i style="background:#4f86e8">78</i><i style="background:#a3afba;color:#0f1a24">52</i><i style="background:#dc5b34">21</i>
+        <i>94</i><i>78</i><i>52</i><i>21</i>
       </span>
       <span class="status" id="ms-status"></span>
       <span class="go">Browse skaters →</span>
@@ -75,7 +82,7 @@ footer { margin-top: 36px; color: var(--muted); font-size: .86rem; }
       <p>Look up any prospect: their scoring translated to an NHL rate each season, from the year before their draft to five
         years after it, and what that rate has meant historically.</p>
       <span class="bar" aria-hidden="true">
-        <i style="width:38%;background:var(--star)"></i><i style="width:27%;background:var(--nhler)"></i><i style="flex:1;background:var(--track)"></i>
+        <i style="flex:1;background:var(--star)"></i><i style="flex:1;background:var(--nhler)"></i><i style="flex:1;background:var(--bust)"></i>
       </span>
       <span class="status">Star · NHLer · bust, for every season from D-1 to D+5</span>
       <span class="go">Look up a prospect →</span>
@@ -85,6 +92,10 @@ footer { margin-top: 36px; color: var(--muted); font-size: .86rem; }
   <footer>Data: NHL play-by-play, shift charts and NHL Edge; prospect careers from the NHL (and Elite Prospects when configured).</footer>
 </main>
 <script>
+// Colour each example percentile by the table's own tiers (site_index.html's tier()).
+const tier = p => p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+for (const chip of document.querySelectorAll(".chips i")) chip.className = tier(+chip.textContent);
+
 fetch("data/meta.json").then(r => r.json()).then(m => {
   const s = m.seasons[0];
   const built = new Date(m.built).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
