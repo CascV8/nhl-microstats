@@ -22,3 +22,9 @@ jobs:
       - name: Run tests
         working-directory: nhl-microstats
         run: uv run pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run NHLe tests
+        working-directory: nhl-microstats
+        run: npm test

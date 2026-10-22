@@ -17,7 +17,7 @@ uv run nhl-microstats pct shooting_pct 12.5 --pos F        # shooting % is used 
 uv run nhl-microstats player "Cale Makar"                  # 2025-26 numbers vs the last 3 seasons
 uv run nhl-microstats cards Buium --season 2026            # early-season card vs the last 3 seasons
 uv run nhl-microstats fit            # refit the percentile curves (build does this too)
-uv run nhl-microstats site           # static website -> site/ (index + a card per player)
+uv run nhl-microstats site           # static website -> site/ (index + a card per player + NHLe prospect cards)
 uv run nhl-microstats watch          # keep the site current: pull each game once the NHL marks it official
 uv run nhl-microstats stats          # every stat in the database
 ```

@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "description": "JavaScript for the website: the NHLe model (src/nhl_microstats/nhle.js) and the Pages Function (functions/).",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/nhle.test.mjs"
+  }
+}

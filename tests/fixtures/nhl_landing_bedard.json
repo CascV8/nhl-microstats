@@ -1,0 +1,247 @@
+{
+ "playerId": 8484144,
+ "firstName": {
+  "default": "Connor"
+ },
+ "lastName": {
+  "default": "Bedard"
+ },
+ "position": "C",
+ "birthDate": "2005-07-17",
+ "birthCountry": "CAN",
+ "headshot": "https://assets.nhle.com/mugs/nhl/20262027/CHI/8484144.png",
+ "draftDetails": {
+  "year": 2023,
+  "teamAbbrev": "CHI",
+  "round": 1,
+  "pickInRound": 1,
+  "overallPick": 1
+ },
+ "seasonTotals": [
+  {
+   "assists": 2,
+   "gameTypeId": 2,
+   "gamesPlayed": 4,
+   "goals": 2,
+   "leagueAbbrev": "J20 Nationell",
+   "points": 4,
+   "season": 20202021,
+   "sequence": 11,
+   "teamName": {
+    "default": "HV71 J20"
+   }
+  },
+  {
+   "assists": 1,
+   "gameTypeId": 2,
+   "gamesPlayed": 1,
+   "goals": 1,
+   "leagueAbbrev": "J18 Region",
+   "points": 2,
+   "season": 20202021,
+   "sequence": 12,
+   "teamName": {
+    "default": "HV71 J18"
+   }
+  },
+  {
+   "assists": 16,
+   "gameTypeId": 2,
+   "gamesPlayed": 15,
+   "goals": 12,
+   "leagueAbbrev": "WHL",
+   "points": 28,
+   "season": 20202021,
+   "sequence": 13,
+   "teamName": {
+    "default": "Regina Pats"
+   }
+  },
+  {
+   "assists": 7,
+   "gameTypeId": 2,
+   "gamesPlayed": 7,
+   "goals": 7,
+   "leagueAbbrev": "WJC-18",
+   "points": 14,
+   "season": 20202021,
+   "sequence": 14,
+   "teamName": {
+    "default": "Canada U18"
+   }
+  },
+  {
+   "assists": 1,
+   "gameTypeId": 2,
+   "gamesPlayed": 1,
+   "goals": 1,
+   "leagueAbbrev": "J18 Region",
+   "points": 2,
+   "season": 20202021,
+   "sequence": 7118,
+   "teamName": {
+    "default": "HV71 J18"
+   }
+  },
+  {
+   "assists": 49,
+   "gameTypeId": 2,
+   "gamesPlayed": 62,
+   "goals": 51,
+   "leagueAbbrev": "WHL",
+   "points": 100,
+   "season": 20212022,
+   "sequence": 11,
+   "teamName": {
+    "default": "Regina Pats"
+   }
+  },
+  {
+   "assists": 1,
+   "gameTypeId": 2,
+   "gamesPlayed": 4,
+   "goals": 6,
+   "leagueAbbrev": "WJC-18",
+   "points": 7,
+   "season": 20212022,
+   "sequence": 12,
+   "teamName": {
+    "default": "Canada U18"
+   }
+  },
+  {
+   "assists": 4,
+   "gameTypeId": 2,
+   "gamesPlayed": 7,
+   "goals": 4,
+   "leagueAbbrev": "WJC-20",
+   "points": 8,
+   "season": 20212022,
+   "sequence": 13,
+   "teamName": {
+    "default": "Canada U20"
+   }
+  },
+  {
+   "assists": 72,
+   "gameTypeId": 2,
+   "gamesPlayed": 57,
+   "goals": 71,
+   "leagueAbbrev": "WHL",
+   "points": 143,
+   "season": 20222023,
+   "sequence": 11,
+   "teamName": {
+    "default": "Regina Pats"
+   }
+  },
+  {
+   "assists": 14,
+   "gameTypeId": 2,
+   "gamesPlayed": 7,
+   "goals": 9,
+   "leagueAbbrev": "WJC-20",
+   "points": 23,
+   "season": 20222023,
+   "sequence": 12,
+   "teamName": {
+    "default": "Canada U20"
+   }
+  },
+  {
+   "assists": 10,
+   "gameTypeId": 3,
+   "gamesPlayed": 7,
+   "goals": 10,
+   "leagueAbbrev": "WHL",
+   "points": 20,
+   "season": 20222023,
+   "sequence": 11,
+   "teamName": {
+    "default": "Regina Pats"
+   }
+  },
+  {
+   "assists": 39,
+   "gameTypeId": 2,
+   "gamesPlayed": 68,
+   "goals": 22,
+   "leagueAbbrev": "NHL",
+   "points": 61,
+   "season": 20232024,
+   "sequence": 1,
+   "teamName": {
+    "default": "Chicago Blackhawks",
+    "fr": "Blackhawks de Chicago"
+   }
+  },
+  {
+   "assists": 3,
+   "gameTypeId": 2,
+   "gamesPlayed": 10,
+   "goals": 5,
+   "leagueAbbrev": "WC",
+   "points": 8,
+   "season": 20232024,
+   "sequence": 11,
+   "teamName": {
+    "default": "Canada"
+   }
+  },
+  {
+   "assists": 3,
+   "gameTypeId": 2,
+   "gamesPlayed": 2,
+   "goals": 0,
+   "leagueAbbrev": "International",
+   "points": 3,
+   "season": 20232024,
+   "sequence": 12,
+   "teamName": {
+    "default": "Team Canada"
+   }
+  },
+  {
+   "assists": 44,
+   "gameTypeId": 2,
+   "gamesPlayed": 82,
+   "goals": 23,
+   "leagueAbbrev": "NHL",
+   "points": 67,
+   "season": 20242025,
+   "sequence": 1,
+   "teamName": {
+    "default": "Chicago Blackhawks",
+    "fr": "Blackhawks de Chicago"
+   }
+  },
+  {
+   "assists": 45,
+   "gameTypeId": 2,
+   "gamesPlayed": 69,
+   "goals": 30,
+   "leagueAbbrev": "NHL",
+   "points": 75,
+   "season": 20252026,
+   "sequence": 1,
+   "teamName": {
+    "default": "Chicago Blackhawks",
+    "fr": "Blackhawks de Chicago"
+   }
+  },
+  {
+   "assists": 2,
+   "gameTypeId": 2,
+   "gamesPlayed": 3,
+   "goals": 1,
+   "leagueAbbrev": "NHL",
+   "points": 3,
+   "season": 20262027,
+   "sequence": 1,
+   "teamName": {
+    "default": "Chicago Blackhawks",
+    "fr": "Blackhawks de Chicago"
+   }
+  }
+ ]
+}
