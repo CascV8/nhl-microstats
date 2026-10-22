@@ -94,7 +94,8 @@ jobs:
             # nothing new from the NHL means no fresh site/ to add the cards to
             [ "${{ steps.update.outputs.changed }}" = "true" ] || uv run nhl-microstats site
           fi
-          if [ -d site ]; then python3 ../nhle/web/build.py site functions; fi
+          # web/ arrives with CascV8/NHLe#1; until then the site deploys without the cards
+          if [ -d site ] && [ -f ../nhle/web/build.py ]; then python3 ../nhle/web/build.py site functions; fi
 
       - name: Deploy to Cloudflare Pages
         if: steps.update.outputs.changed == 'true' || steps.nhle.outputs.changed == 'true'
