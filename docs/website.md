@@ -25,47 +25,11 @@ and the watcher regenerates them whenever there's something new. Reasons:
 | Page | What it shows |
 |---|---|
 | `index.html` | Every skater in a season: search, F/D filter, team, minimum GP, 5v5 / all situations, and a sortable table of xGF% and each category's percentile. Season picker; status line with games included, games awaiting shift charts, and last update. |
-| `nhle.html?src=nhl&id=8486067` | NHLe prospect cards (below): search any player or browse a draft class or league; the card is built when a player is picked. |
+| `nhle.html?src=nhl&id=8486067` | NHLe prospect cards, from the [NHLe repo](https://github.com/CascV8/NHLe) (`web/`). The deploy workflow checks NHLe out and runs `web/build.py site functions`, which adds the page and its Pages Function; a new NHLe commit is deployed on the next run even with no new games. See NHLe's `web/README.md`. |
 | `player.html?season=2026&id=8476902` | The player card (`cards_template.html`, the same file `nhl-microstats cards` uses) loaded with that player's JSON. Back link to the index. |
 
 The card template works both ways: `nhl-microstats cards` embeds the data; on the site,
 `DATA` is empty and the page fetches `data/<season>/players/<id>.json`.
-
-## NHLe prospect cards
-
-`nhle.html` ports the NHLe repo's draft models (one per draft-relative season, D-1 to D+5, forwards and
-defensemen) and its card graphic. Nothing is generated ahead of time: when someone searches or clicks a
-player, the page asks `functions/api/[[path]].js` (a Cloudflare Pages Function, deployed with the site
-because `wrangler pages deploy` picks up `functions/`) for that player's career, and `nhle.js` computes the
-card in the browser. Responses are cached at Cloudflare's edge (players and searches for an hour, draft
-classes for a day).
-
-| Endpoint | Source |
-|---|---|
-| `api/search?q=` | Elite Prospects if `EP_API_KEY` is set, else the NHL's player search |
-| `api/player?src=ep\|nhl&id=` | Elite Prospects player + stats + draft selections, or the NHL's player landing |
-| `api/draft?year=` | the NHL's draft records (every pick with an NHL player id) |
-| `api/league?league=ohl&season=2025` | Elite Prospects only: a league's scorers, for browsing undrafted players |
-
-**Elite Prospects is the main source.** The NHL's database only has players who were drafted or signed, so
-pre-draft prospects (e.g. 2027-eligibles) and undrafted players need Elite Prospects. That takes their API
-(api.eliteprospects.com, paid) rather than scraping: their pages sit behind a Cloudflare challenge and their
-terms don't allow it. Once you have a key:
-
-```
-npx wrangler pages secret put EP_API_KEY --project-name nhl-microstats
-```
-
-No redeploy of the data is needed; the next request uses it and the page shows league browsing. Until then
-the page runs on the NHL's data. The Elite Prospects field names in `epPlayer` and the route paths were
-written from their documentation without a key to test against: check one player against
-`api/player?src=ep&id=...` after adding it, and adjust `epPlayer` if a field comes back empty.
-
-Model notes: league keys are Elite Prospects slugs, with NHL abbreviations mapped onto them (`leagueKey`);
-leagues without a factor are shown but left out. The World Juniors team-share adjustment isn't applied
-(it needs each team's scoring totals). Undrafted players are placed by their first eligible draft. The
-NHLe repo's defense D+1 to D+5 files are copies of the forward models, so those seasons use the forward
-coefficients. Tests: `npm test` (checks the JS against the Python models' outputs).
 
 ## Data files
 
