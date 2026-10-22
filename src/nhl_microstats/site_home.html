@@ -11,18 +11,18 @@
 /* Same tokens as the microstats index and the NHLe cards. The home page is a choice between the two. */
 :root {
   --bg: #e9eef2; --surface: #ffffff; --ink: #0f1a24; --muted: #566573; --line: #d3dce3; --track: #e3e9ee;
-  --accent: #b3122e; --star: #ffc400; --nhler: #00c01e;
+  --accent: #b3122e; --star: #ffc400; --nhler: #00c01e; --bust: #d9d9d9;
   --elite: #1747c9; --good: #4f86e8; --avg: #a3afba; --weak: #dc5b34;
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a;
+  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a; --bust: #34424f;
   --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a;
+  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a; --bust: #34424f;
   --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark }
 
 * { box-sizing: border-box }
@@ -82,7 +82,7 @@ footer { margin-top: 36px; color: var(--muted); font-size: .86rem; }
       <p>Look up any prospect: their scoring translated to an NHL rate each season, from the year before their draft to five
         years after it, and what that rate has meant historically.</p>
       <span class="bar" aria-hidden="true">
-        <i style="width:38%;background:var(--star)"></i><i style="width:27%;background:var(--nhler)"></i><i style="flex:1;background:var(--track)"></i>
+        <i style="flex:1;background:var(--star)"></i><i style="flex:1;background:var(--nhler)"></i><i style="flex:1;background:var(--bust)"></i>
       </span>
       <span class="status">Star · NHLer · bust, for every season from D-1 to D+5</span>
       <span class="go">Look up a prospect →</span>
