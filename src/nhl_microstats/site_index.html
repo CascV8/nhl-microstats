@@ -52,7 +52,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   border-radius: 6px; padding: 10px 14px; margin: 0 0 14px; max-width: 80ch; }
 .note b { color: var(--accent); }
 
-.table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+/* The box hugs the table rather than running empty to the page's right edge; narrow screens scroll it. */
+.table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto;
+  width: fit-content; max-width: 100%; }
 /* Sized to its content rather than stretched across the page; the percentile columns all share one width. */
 table { border-collapse: collapse; width: auto; font-size: .88rem; font-variant-numeric: tabular-nums; }
 th.c, td.c { width: 3.6em; min-width: 3.6em; text-align: center; padding-inline: 3px; }
@@ -84,6 +86,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
     <div>
       <h1>NHL Microstats <span id="season-name"></span></h1>
       <p class="status" id="status">Loading…</p>
+      <p class="status"><a href="nhle.html" style="color:var(--accent);font-weight:600">NHLe prospect cards →</a></p>
     </div>
     <label for="season">Season <select id="season"></select></label>
   </header>

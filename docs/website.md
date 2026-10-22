@@ -25,6 +25,7 @@ and the watcher regenerates them whenever there's something new. Reasons:
 | Page | What it shows |
 |---|---|
 | `index.html` | Every skater in a season: search, F/D filter, team, minimum GP, 5v5 / all situations, and a sortable table of xGF% and each category's percentile. Season picker; status line with games included, games awaiting shift charts, and last update. |
+| `nhle.html?src=nhl&id=8486067` | NHLe prospect cards, from the [NHLe repo](https://github.com/CascV8/NHLe) (`web/`). The deploy workflow checks NHLe out and runs `web/build.py site functions`, which adds the page and its Pages Function; a new NHLe commit is deployed on the next run even with no new games. See NHLe's `web/README.md`. |
 | `player.html?season=2026&id=8476902` | The player card (`cards_template.html`, the same file `nhl-microstats cards` uses) loaded with that player's JSON. Back link to the index. |
 
 The card template works both ways: `nhl-microstats cards` embeds the data; on the site,
