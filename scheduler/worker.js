@@ -6,7 +6,7 @@
 //
 // Secret: GITHUB_TOKEN, a fine-grained token for this repo with Actions: Read and write.
 
-const REPO = "CascV8/nhl-microstats";
+const REPO = "CascV8/pattullometrics";
 const WORKFLOW = "update-site.yml";
 
 // A pasted secret often picks up a trailing newline or space, or quotes around it.
