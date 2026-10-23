@@ -115,6 +115,15 @@ def collect_bios(season, refresh: bool = False) -> Path:
     return path
 
 
+def collect_goalies(season, refresh: bool = False) -> Path:
+    """Every goalie's season totals (games, shots and goals against, save %, record) from the NHL's goalie
+    summary report, for the goalie cards. ``refresh`` re-downloads, for a season in progress."""
+    path = DATA / f"goalies_{start_year(season)}.parquet"
+    if refresh or not path.exists():
+        ps.nhl.goalie_stats(season).to_parquet(path)
+    return path
+
+
 def collect_edge(season, player_ids, workers: int = 4, refresh=()) -> Path:
     """NHL Edge skater summaries (speed, shot speed, distance, zone time). Players in
     ``refresh`` are downloaded again (their season totals grow with every game)."""
