@@ -9,10 +9,13 @@ Layout of the output:
     index.html                  home page: a choice between the microstats and the NHLe prospect cards
     microstats.html             player directory and leaderboards
     player.html                 the card, loaded from ?season=YYYY&id=NNN
+    goalies.html                every goalie in a season, sortable
+    goalie.html                 a goalie's card, loaded from ?season=YYYY&id=NNN
     data/meta.json              seasons, when it was built, games included, games awaiting shift charts
     data/player_seasons.json    {player id: [seasons with a card]}, for the player page's season picker
     data/<season>/index.json    one compact row per skater
     data/<season>/players/<id>.json   one card's data (the same shape the cards page embeds)
+    data/<season>/goalies.json  every goalie's ratings (goalies.py)
 
 Everything is written to a temporary folder first and swapped in at the end, so a
 visitor never sees half an update. Complete seasons don't change between games, so their
@@ -28,10 +31,11 @@ import logging
 import shutil
 from pathlib import Path
 
+import pandas as pd
 import pyarrow.parquet as pq
 from puckscrape._util import start_year
 
-from . import collect
+from . import collect, goalies
 from .cards import MODES, TEMPLATE, card_data
 from .db import connect
 from .percentile import complete_seasons, season_name
@@ -40,10 +44,12 @@ log = logging.getLogger("nhl_microstats.site")
 
 INDEX_TEMPLATE = Path(__file__).with_name("site_index.html")
 HOME_TEMPLATE = Path(__file__).with_name("site_home.html")
+# published name: template, for the goalie pages
+GOALIE_PAGES = {"goalies.html": "site_goalies.html", "goalie.html": "site_goalie.html"}
 OUT = collect.ROOT / "site"
 CACHE = collect.DATA / "site_cache"
 # What a season's exported files depend on, besides its own rows: the code and the curves.
-CODE = ["cards.py", "curves.py", "percentile.py", "site.py", "db.py"]
+CODE = ["cards.py", "curves.py", "percentile.py", "site.py", "db.py", "goalies.py"]
 
 
 FIRST_SEASON = 2023   # the site starts with the first season of the curves' comparison pool (2023-24)
@@ -59,7 +65,7 @@ def default_seasons() -> list[int]:
 def code_hash() -> str:
     """Changes whenever the code or templates that shape the site do."""
     h = hashlib.sha256()
-    for name in [*CODE, TEMPLATE.name, INDEX_TEMPLATE.name, HOME_TEMPLATE.name]:
+    for name in [*CODE, TEMPLATE.name, INDEX_TEMPLATE.name, HOME_TEMPLATE.name, *GOALIE_PAGES.values()]:
         h.update(Path(__file__).with_name(name).read_bytes())
     return h.hexdigest()
 
@@ -85,7 +91,21 @@ def _export_season(y: int, folder: Path) -> dict:
     for c in cards:
         (folder / "players" / f"{c['id']}.json").write_text(json.dumps(d | {"site": True, "cards": [c]}), encoding="utf-8")
     (folder / "index.json").write_text(json.dumps(d | {"rows": [_index_row(c) for c in cards]}), encoding="utf-8")
-    return {"season": y, "name": season_name([y]), "early": d["early"], "players": len(cards)}
+    n_goalies = _export_goalies(y, not d["early"], folder)
+    return {"season": y, "name": season_name([y]), "early": d["early"], "players": len(cards), "goalies": n_goalies}
+
+
+def _export_goalies(y: int, complete: bool, folder: Path) -> int:
+    """The season's goalie ratings (goalies.py) for the goalie pages; 0 if the NHL's report can't be had."""
+    try:
+        df = pd.read_parquet(collect.collect_goalies(y))
+    except Exception as e:   # goalie cards are an extra: a site without them beats no site
+        log.warning("%s: no goalie stats (%s)", y, e)
+        return 0
+    rows = goalies.goalie_ratings(df, complete)
+    (folder / "goalies.json").write_text(json.dumps({"season": y, "name": season_name([y]), "early": not complete,
+                                                     **goalies.season_meta(df, complete), "goalies": rows}), encoding="utf-8")
+    return len(rows)
 
 
 def games_status(y: int) -> dict:
@@ -147,6 +167,8 @@ def export_site(seasons=None, out: Path | str = OUT) -> Path:
     (tmp / "data" / "player_seasons.json").write_text(json.dumps(by_player), encoding="utf-8")
     shutil.copy(HOME_TEMPLATE, tmp / "index.html")
     shutil.copy(INDEX_TEMPLATE, tmp / "microstats.html")
+    for name, src in GOALIE_PAGES.items():
+        shutil.copy(Path(__file__).with_name(src), tmp / name)
     # The card template is a fragment (cards.html gets wrapped by whatever shows it); give it a document head.
     head = '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     (tmp / "player.html").write_text(head + TEMPLATE.read_text(encoding="utf-8").replace(

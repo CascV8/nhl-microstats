@@ -237,3 +237,24 @@ def test_quality_of_competition_skips_unrated_opponents():
     xgf[6], xga[6] = 6.0, 4.0                              # only 6 has any xG: 60%
     q = build.competition(shifts, set(range(1, 11)), xgf, xga)
     assert q.loc[1] == pytest.approx(60)
+
+
+def test_goalie_ratings():
+    """Goalie cards: GSAA/GP, SV% and GA/GP percentiles within the pool, and an overall curved against it."""
+    from nhl_microstats import goalies
+    rows = [  # player_id, name, team, gp, sa, ga
+        (1, "Good", "VAN", 30, 900, 70), (2, "Avg", "EDM", 30, 900, 90), (3, "Bad", "CGY", 30, 900, 110),
+        (4, "Rookie", "SEA", 5, 150, 10),   # under the 20-game pool line: rated against the pool, not part of it
+    ]
+    df = pd.DataFrame([{"player_id": i, "goalie_full_name": n, "team_abbrevs": t, "games_played": gp, "shots_against": sa,
+                        "goals_against": ga, "saves": sa - ga, "wins": 0, "losses": 0, "ot_losses": 0, "shutouts": 0}
+                       for i, n, t, gp, sa, ga in rows])
+    out = {g["name"]: g for g in goalies.goalie_ratings(df, complete=True)}
+    assert out["Good"]["overall"] > out["Avg"]["overall"] > out["Bad"]["overall"]
+    assert not out["Rookie"]["qualified"] and out["Good"]["qualified"]
+    sv = {m["key"]: m for m in out["Good"]["metrics"]}
+    assert sv["sv"]["value"] == pytest.approx(830 / 900, abs=1e-4)
+    assert sv["ga_gp"]["pct"] > 50   # fewest goals against: a high percentile
+    lg_sv = 1 - (70 + 90 + 110 + 10) / (900 * 3 + 150)
+    assert sv["gsaa_gp"]["value"] == pytest.approx((900 * (1 - lg_sv) - 70) / 30, abs=1e-4)
+    assert goalies.season_meta(df, complete=True)["pool"] == 3
