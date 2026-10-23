@@ -6,18 +6,13 @@
 /* Layout: a scouting binder. Controls bar, then a grid of cards; each card is a team-colour band,
    a headline number, and percentile rows with a tick at the league median. */
 :root {
-  --bg: #e9eef2; --surface: #ffffff; --ink: #0f1a24; --muted: #566573; --line: #d3dce3; --track: #e3e9ee;
-  --accent: #b3122e;
-  --elite: #1747c9; --good: #4f86e8; --avg: #a3afba; --weak: #dc5b34;
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f0566c;
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52;
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark } }
-:root[data-theme="dark"] {
-  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52; color-scheme: dark }
 
 * { box-sizing: border-box }
 [hidden] { display: none !important; }
