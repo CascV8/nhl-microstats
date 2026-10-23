@@ -28,6 +28,11 @@ h1 { font: 700 2.4rem/1 var(--display); text-transform: uppercase; letter-spacin
 h1 span { color: var(--accent); }
 .status { color: var(--muted); margin: 6px 0 0; font-size: .9rem; }
 .controls { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { font: 600 .82rem var(--body); letter-spacing: .03em; text-transform: uppercase; border: 0; background: none;
+  color: var(--muted); padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 input, select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 8px; }
 input[type="search"] { width: min(260px, 100%); }
@@ -59,7 +64,7 @@ td a { color: var(--ink); font-weight: 600; text-decoration: none; } td a:hover 
 <div class="wrap">
   <header>
     <div>
-      <p class="nav"><a href="./">← Home</a><a href="microstats.html">Skaters</a></p>
+      <p class="nav"><a href="./">← Home</a></p>
       <h1>NHL Goalies <span id="season-name"></span></h1>
       <p class="status" id="status">Loading…</p>
     </div>
@@ -67,6 +72,13 @@ td a { color: var(--ink); font-weight: 600; text-decoration: none; } td a:hover 
   </header>
   <div class="controls">
     <input type="search" id="q" placeholder="Search goalies or teams" aria-label="Search goalies or teams">
+    <!-- the same position switch as the skater table: All / Forwards / Defense go back to it -->
+    <div class="seg" role="group" aria-label="Position">
+      <button type="button" data-pos="all" aria-pressed="false">All</button>
+      <button type="button" data-pos="F" aria-pressed="false">Forwards</button>
+      <button type="button" data-pos="D" aria-pressed="false">Defense</button>
+      <button type="button" aria-pressed="true">Goalies</button>
+    </div>
     <label for="team">Team <select id="team"><option value="">All</option></select></label>
     <label for="mingp">Min GP <input type="number" id="mingp" min="0"></label>
   </div>
@@ -136,6 +148,8 @@ async function loadSeason(y) {
 }
 
 document.addEventListener("click", e => {
+  const pos = e.target.closest("[data-pos]");
+  if (pos) { location.href = `microstats.html?pos=${pos.dataset.pos}&season=${state.season}`; return; }
   const th = e.target.closest("th"); if (!th) return;
   const k = th.dataset.key;
   state.dir = state.sort === k ? -state.dir : (["name", "team"].includes(k) ? 1 : -1); state.sort = k; render();
