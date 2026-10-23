@@ -2,10 +2,11 @@
 
     nhl-microstats lineups      # refresh the Daily Faceoff lineups and NHL rosters (at most every REFRESH_HOURS)
 
-The site build (site.py) then writes, for the season under way:
+The site build (site.py) then writes, for the season under way and each complete season with its lineups after the
+trade deadline shipped in team_seasons/ (deadline.py):
 
-    data/teams/index.json       the 32 teams: abbrev, name, logo, record, overall
-    data/teams/<ABBR>.json      one team's page (team.html?team=ABBR)
+    data/teams/<year>/index.json    the teams: abbrev, name, record, overall rank
+    data/teams/<year>/<ABBR>.json   one team's page (team.html?team=ABBR&season=YYYY)
     logos/<ABBR>.svg            the team's logo, served with the site so the page can read and crop it (the NHL's
                                 asset server allows no cross-origin reads)
 
@@ -183,13 +184,109 @@ def _ranks(values: dict[str, float | None], lower_better: bool = False) -> dict[
     return {a: None if v is None else 1 + sum(1 for x in have if better(x, v)) for a, v in values.items()}
 
 
-def export_teams(season_dir: Path, y: int, out: Path) -> int:
-    """Write data/teams/ into ``out`` from season ``y``'s exported skaters and goalies (``season_dir``). Only for the
-    season under way (Daily Faceoff and the standings are today's). Returns the number of team pages written."""
+def _current_teams(y: int, rows: list[dict], gdata: dict) -> list[dict]:
+    """The season under way: today's standings and stats, and Daily Faceoff's lineups matched to NHL ids. Each team:
+    abbrev, name, record, points, gp, stats, groups {Daily Faceoff group: [(id, name, slot)]}, extras, source."""
+    now = {_key(t["teamFullName"]): t for t in _summary(y)}
     table = standings()
-    if not table or int(str(table[0]["seasonId"])[:4]) != y:
-        log.info("teams: %s isn't the season under way; no team pages", y)
-        return 0
+    opening = _season_openers(y, len(table))
+    out = []
+    for t in table:
+        abbr, name = t["teamAbbrev"]["default"], t["teamName"]["default"]
+        lp = LINEUPS / f"{abbr}.json"
+        saved = json.loads(lp.read_text(encoding="utf-8")) if lp.exists() else {}
+        combos, roster = saved.get("combinations") or {"players": []}, saved.get("roster") or []
+        # match against the roster and everyone who has played for the team this season: the NHL's current roster
+        # leaves out players on long-term injured reserve, who Daily Faceoff still lists
+        on_roster = {pid for _, pid, _ in roster}
+        played = [[r["name"], r["id"], r["pos"]] for r in rows if abbr in _teams_of(r["team"]) and r["id"] not in on_roster]
+        played += [[g["name"], g["id"], "G"] for g in gdata["goalies"] if abbr in _teams_of(g["team"]) and g["id"] not in on_roster]
+        match = _matcher(roster + played)
+        # even-strength slots carry real positions, so they match reliably; special-teams and IR slots reuse them
+        ev = {p["name"]: match(p["name"], p["positionIdentifier"]) for p in combos["players"]
+              if p["positionIdentifier"].lower()[:2] not in ("sk", "ir")}
+        groups: dict[str, list] = {}
+        for p in combos["players"]:
+            pid = ev.get(p["name"]) or match(p["name"], p["positionIdentifier"])
+            groups.setdefault(p["groupIdentifier"], []).append((pid, p["name"], p["positionIdentifier"].upper()))
+        dressed = {pid for g in [*(groups.get(f"f{i}", []) for i in range(1, 5)), *(groups.get(f"d{i}", []) for i in range(1, 4)),
+                                 groups.get("g", []), groups.get("ir", [])] for pid, _, _ in g}
+        s = now.get(_key(name)) or {}
+        latest = {"key": "latest", "label": "Latest", "groups": groups,
+                  "extras": [(pid, n, pos) for n, pid, pos in roster if pid not in dressed],
+                  "source": {"site": "Daily Faceoff", "updated": combos.get("updatedAt"), "via": combos.get("sourceName"),
+                             "url": f"https://www.dailyfaceoff.com/teams/{slug(name)}/line-combinations"}}
+        out.append({"abbrev": abbr, "name": name, "record": f'{t["wins"]}-{t["losses"]}-{t["otLosses"]}',
+                    "points": t["points"], "gp": t["gamesPlayed"], "stats": {k: s.get(k) for k, _ in TEAM_STATS},
+                    "lineups": [latest, *_opening(opening.get(abbr), rows, gdata)]})
+    return out
+
+
+def _named(rows: list[dict], gdata: dict):
+    """(id, slot) -> (id, name, slot) from the season's skaters and goalies; and id -> the player's own position."""
+    names = {r["id"]: (r["name"], r["pos"]) for r in rows} | {g["id"]: (g["name"], "G") for g in gdata["goalies"]}
+    return (lambda pid, slot: (pid, names.get(pid, ("", ""))[0], slot)), (lambda pid: names.get(pid, ("", ""))[1] or "")
+
+
+def _groups(lineup: dict, who, own) -> dict[str, list]:
+    """A lineup from the shift charts (deadline.py) in Daily Faceoff's groups: f1-f4, d1-d3, g, pp1-pp2, pk1-pk2."""
+    groups = {f"f{i + 1}": [who(p, FORWARD_SLOTS[j] if len(line) == 3 else own(p)) for j, p in enumerate(line)]
+              for i, line in enumerate(lineup["lines"])}
+    groups |= {f"d{i + 1}": [who(p, "D") for p in pair] for i, pair in enumerate(lineup["pairs"])}
+    groups["g"] = [who(p, f"G{j + 1}") for j, p in enumerate(lineup["goalies"])]
+    groups |= {f"pp{i + 1}": [who(p, own(p)) for p in u] for i, u in enumerate(lineup["pp"])}
+    groups |= {f"pk{i + 1}": [who(p, own(p)) for p in u] for i, u in enumerate(lineup["pk"])}
+    return groups
+
+
+def _opening(lineup: dict | None, rows: list[dict], gdata: dict) -> list[dict]:
+    """The opening-night lineup as a page lineup (none if the team's first game isn't known)."""
+    if not lineup:
+        return []
+    who, own = _named(rows, gdata)
+    return [{"key": "opening", "label": "Opening night", "groups": _groups(lineup, who, own), "extras": None,
+             "source": {"site": "the NHL's shift charts", "opening": lineup["date"]}}]
+
+
+def _season_openers(y: int, n_teams: int) -> dict[str, dict]:
+    """The season under way's opening-night lineups, worked out once every team has played (deadline.py) and kept."""
+    path = collect.DATA / f"opening_{y}.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    from .deadline import opening_lineups   # it reads the shift charts; deadline.py imports this module
+    try:
+        opening = opening_lineups(y)
+    except Exception as e:
+        log.warning("%s: no opening-night lineups (%s)", y, e)
+        return {}
+    if len(opening) >= n_teams:
+        path.write_text(json.dumps(opening), encoding="utf-8")
+    return opening
+
+
+SEASONS_SHIPPED = Path(__file__).with_name("team_seasons")   # <year>.json, written by deadline.py
+FORWARD_SLOTS = ("LW", "C", "RW")
+
+
+def _deadline_teams(y: int, rows: list[dict], gdata: dict) -> list[dict]:
+    """A complete season: each team's final numbers and its lineup after the trade deadline (deadline.py), in the
+    same shape as _current_teams."""
+    d = json.loads((SEASONS_SHIPPED / f"{y}.json").read_text(encoding="utf-8"))
+    who, own = _named(rows, gdata)
+    out = []
+    for t in d["teams"]:
+        after = {"key": "deadline", "label": "Post-deadline", "groups": _groups(t, who, own),
+                 "extras": [who(p, own(p)) for p in t["extras"]],
+                 "source": {"site": "the NHL's shift charts", "deadline": d["deadline"], "games": t["games_after"]}}
+        out.append({"abbrev": t["abbrev"], "name": t["name"], "record": t["record"], "points": t["points"], "gp": t["gp"],
+                    "stats": t["stats"], "lineups": [after, *_opening(t.get("opening"), rows, gdata)]})
+    return out
+
+
+def export_teams(season_dir: Path, y: int, out: Path) -> int:
+    """Write data/teams/<y>/ into ``out`` from season ``y``'s exported skaters and goalies (``season_dir``): the season
+    under way from Daily Faceoff and today's standings, a complete season from its lineup after the trade deadline
+    (team_seasons/<y>.json). Returns the number of team pages written."""
     rows = json.loads((season_dir / "index.json").read_text(encoding="utf-8"))["rows"]
     gpath = season_dir / "goalies.json"
     gdata = json.loads(gpath.read_text(encoding="utf-8")) if gpath.exists() else {"goalies": []}
@@ -213,34 +310,30 @@ def export_teams(season_dir: Path, y: int, out: Path) -> int:
                 num += g["overall"] * g["gp"]; den += g["gp"]
         out["Goaltending"] = num / den if den else None
         return out
+    table = standings()
+    if table and int(str(table[0]["seasonId"])[:4]) == y:
+        teams = _current_teams(y, rows, gdata)
+    elif (SEASONS_SHIPPED / f"{y}.json").exists():
+        teams = _deadline_teams(y, rows, gdata)
+    else:
+        log.info("teams: no team pages for %s (not under way, and no lineup after its deadline)", y)
+        return 0
+
     # every metric's value per team, then each team's rank on each, and the overall from the ranks
-    now = {_key(t["teamFullName"]): t for t in _summary(y)}
-    values = {}
-    for t in table:
-        abbr, s = t["teamAbbrev"]["default"], now.get(_key(t["teamName"]["default"])) or {}
-        values[abbr] = {label: s.get(k) for k, label in TEAM_STATS} | profile(abbr)
+    values = {t["abbrev"]: {label: t["stats"].get(k) for k, label in TEAM_STATS} | profile(t["abbrev"]) for t in teams}
     metrics = list(next(iter(values.values())))
     ranks = {m: _ranks({a: v[m] for a, v in values.items()}) for m in metrics}
     mean_rank = {a: (sum(r) / len(r) if (r := [ranks[m][a] for m in metrics if ranks[m][a] is not None]) else None)
                  for a in values}
     overall = _ranks(mean_rank, lower_better=True)
 
-    folder = out / "data" / "teams"
+    folder = out / "data" / "teams" / str(y)
     folder.mkdir(parents=True, exist_ok=True)
     note = (f"Overall: the average of GSAx/GP, SV% and GA/GP percentiles, curved against the {gdata.get('pool', 0)} goalies "
             f"with {gdata.get('min_gp', 0)}+ games.") if gdata["goalies"] else ""
     index = []
-    for t in sorted(table, key=lambda t: t["teamName"]["default"]):
-        abbr, name = t["teamAbbrev"]["default"], t["teamName"]["default"]
-        lp = LINEUPS / f"{abbr}.json"
-        saved = json.loads(lp.read_text(encoding="utf-8")) if lp.exists() else {}
-        combos, roster = saved.get("combinations") or {"players": []}, saved.get("roster") or []
-        # match against the roster and everyone who has played for the team this season: the NHL's current roster
-        # leaves out players on long-term injured reserve, who Daily Faceoff still lists
-        on_roster = {pid for _, pid, _ in roster}
-        played = [[r["name"], r["id"], r["pos"]] for r in rows if abbr in _teams_of(r["team"]) and r["id"] not in on_roster]
-        played += [[g["name"], g["id"], "G"] for g in gdata["goalies"] if abbr in _teams_of(g["team"]) and g["id"] not in on_roster]
-        match = _matcher(roster + played)
+    for t in sorted(teams, key=lambda t: t["name"]):
+        abbr, name = t["abbrev"], t["name"]
 
         def card(pid, name, slot):
             r, g = skaters.get(pid), goalies.get(pid)
@@ -256,19 +349,16 @@ def export_teams(season_dir: Path, y: int, out: Path) -> int:
                             "pts": r["g"] + r["a"]}
             return c | {"pos": "G" if _group(slot) == "G" else slot, "ovr": None}
 
-        # even-strength slots carry real positions, so they match reliably; special-teams and IR slots reuse them
-        ev = {p["name"]: match(p["name"], p["positionIdentifier"]) for p in combos["players"]
-              if p["positionIdentifier"].lower()[:2] not in ("sk", "ir")}
-        groups: dict[str, list] = {}
-        for p in combos["players"]:
-            pid = ev.get(p["name"]) or match(p["name"], p["positionIdentifier"])
-            groups.setdefault(p["groupIdentifier"], []).append(card(pid, p["name"], p["positionIdentifier"].upper()))
-        lines = [groups[f"f{i}"] for i in range(1, 5) if groups.get(f"f{i}")]
-        pairs = [groups[f"d{i}"] for i in range(1, 4) if groups.get(f"d{i}")]
-        dressed = {c["id"] for grp in [*lines, *pairs, groups.get("g", [])] for c in grp}
-        injured = groups.get("ir", [])
-        hurt = {c["id"] for c in injured}
-        extras = [card(pid, n, pos) for n, pid, pos in roster if pid not in dressed and pid not in hurt]
+        def lineup(lu: dict) -> dict:
+            """One version of the lineup (latest, post-deadline, opening night) as the page draws it. Extras are None
+            where the version has none to show (opening night: only the dressed players are known)."""
+            groups = lu["groups"]
+            cards = lambda key: [card(*p) for p in groups.get(key, [])]
+            return {"key": lu["key"], "label": lu["label"], "source": lu["source"],
+                    "lines": [cards(f"f{i}") for i in range(1, 5) if groups.get(f"f{i}")],
+                    "pairs": [cards(f"d{i}") for i in range(1, 4) if groups.get(f"d{i}")], "goalies": cards("g"),
+                    "pp": [cards("pp1"), cards("pp2")], "pk": [cards("pk1"), cards("pk2")], "injured": cards("ir"),
+                    "extras": None if lu["extras"] is None else [card(*p) for p in lu["extras"]]}
 
         # the metrics in order, each with its rank; P%, PP% and PK% with the stat itself
         shown = [{"k": m, "rank": ranks[m][abbr],
@@ -276,17 +366,13 @@ def export_teams(season_dir: Path, y: int, out: Path) -> int:
                  for m in metrics]
         page = {
             "abbrev": abbr, "name": name, "season": y, "seasonName": season_name([y]),
-            "record": f'{t["wins"]}-{t["losses"]}-{t["otLosses"]}', "points": t["points"], "gp": t["gamesPlayed"],
+            "record": t["record"], "points": t["points"], "gp": t["gp"],
             "rank": overall[abbr], "teams": len(values), "metrics": shown,
-            "lineupSource": {"site": "Daily Faceoff", "updated": combos.get("updatedAt"), "via": combos.get("sourceName"),
-                             "url": f"https://www.dailyfaceoff.com/teams/{slug(name)}/line-combinations"},
-            "lines": lines, "pairs": pairs, "goalies": groups.get("g", []),
-            "pp": [groups.get("pp1", []), groups.get("pp2", [])], "pk": [groups.get("pk1", []), groups.get("pk2", [])],
-            "injured": injured, "extras": extras, "goalieNote": note,
+            "lineups": [lineup(lu) for lu in t["lineups"]], "goalieNote": note,
         }
         (folder / f"{abbr}.json").write_text(json.dumps(page), encoding="utf-8")
         _logo(abbr, out)
-        index.append({"abbrev": abbr, "name": name, "record": page["record"], "points": t["points"], "rank": page["rank"]})
+        index.append({"abbrev": abbr, "name": name, "record": page["record"], "points": page["points"], "rank": page["rank"]})
     index.sort(key=lambda t: (t["rank"] or len(index) + 1, t["name"]))   # best first
     (folder / "index.json").write_text(json.dumps({"season": y, "seasonName": season_name([y]), "teams": index}), encoding="utf-8")
     log.info("teams: %d team pages", len(index))

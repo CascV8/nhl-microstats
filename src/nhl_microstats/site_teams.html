@@ -39,12 +39,17 @@ h1 { font: 700 2.6rem/1 var(--display); text-transform: uppercase; letter-spacin
 .t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
 .t-none { background: var(--track); color: var(--muted) }
 .status { color: var(--muted); }
+.head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.season { font: 600 .82rem var(--body); color: var(--muted); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <p class="nav"><a href="./">← Home</a></p>
-  <h1>NHL teams</h1>
+  <div class="head"><h1>NHL teams</h1>
+    <label class="season" id="season-label" hidden>Season <select id="season"></select></label></div>
   <p class="sub" id="sub"></p>
   <p class="status" id="status">Loading…</p>
   <div class="grid" id="grid"></div>
@@ -57,18 +62,31 @@ const ordinal = n => { const v = n % 100, s = v >= 11 && v <= 13 ? "th" : ({ 1: 
 // a rank of the league's teams (1st best), coloured as the percentile it stands for: 1st is 100, last is 0
 const rankTier = (r, n) => r == null ? "t-none" : tier(100 * (n - r) / Math.max(n - 1, 1));
 
-(async () => {
+// The season: ?season=YYYY, else the newest with team pages (data/teams/seasons.json); the picker switches in place.
+async function show(y) {
   let d;
-  try { d = await (await fetch("data/teams/index.json")).json(); }
-  catch { $("status").textContent = "No team pages yet."; return; }
+  try { d = await (await fetch(`data/teams/${y}/index.json`)).json(); }
+  catch { $("status").textContent = "No team pages for that season."; $("status").hidden = false; $("grid").innerHTML = ""; return; }
   $("status").hidden = true;
   const n = d.teams.length;
   $("sub").textContent = `${d.seasonName} · best to worst: each team's overall rank of ${n}, from the average of its metric ranks`;
   const teams = [...d.teams].sort((a, b) => (a.rank ?? n + 1) - (b.rank ?? n + 1) || a.name.localeCompare(b.name));
-  $("grid").innerHTML = teams.map(t => `<a class="team" href="team.html?team=${t.abbrev}">
+  $("grid").innerHTML = teams.map(t => `<a class="team" href="team.html?team=${t.abbrev}&season=${y}">
     <img src="logos/${t.abbrev}.svg" alt="" onerror="this.style.visibility='hidden'">
     <span><div class="nm">${esc(t.name)}</div><div class="rec">${esc(t.record)} · ${t.points} pts</div></span>
     <span class="pct ${rankTier(t.rank, n)}" title="Team overall: ${t.rank ? ordinal(t.rank) : "–"} of ${n}">${t.rank ? ordinal(t.rank) : "–"}</span></a>`).join("");
+}
+
+(async () => {
+  let seasons;
+  try { seasons = await (await fetch("data/teams/seasons.json")).json(); }
+  catch { $("status").textContent = "No team pages yet."; return; }
+  const asked = +new URLSearchParams(location.search).get("season");
+  const y = seasons.some(s => s.season === asked) ? asked : seasons[0].season;
+  $("season").innerHTML = seasons.map(s => `<option value="${s.season}">${esc(s.name)}</option>`).join("");
+  $("season").value = y; $("season-label").hidden = seasons.length < 2;
+  $("season").addEventListener("change", e => { history.replaceState(null, "", `?season=${e.target.value}`); show(e.target.value); });
+  show(y);
 })();
 </script>
 </body>

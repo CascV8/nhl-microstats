@@ -53,6 +53,9 @@ def main() -> None:
     ln = sub.add_parser("lineups", help="refresh Daily Faceoff lineups and NHL rosters for the team pages")
     ln.add_argument("--force", action="store_true", help="refetch even if fetched in the last few hours")
 
+    dl = sub.add_parser("deadline-lineups", help="past seasons' team lineups after the trade deadline, from shift charts")
+    dl.add_argument("seasons", nargs="+", help="start years of complete seasons")
+
     st = sub.add_parser("site", help="export the static website to site/ (index + a card per player)")
     st.add_argument("seasons", nargs="*", help="start years (default: the season in progress and the last complete one)")
     st.add_argument("--out", default=None)
@@ -124,6 +127,10 @@ def main() -> None:
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                 f.write(f"fingerprint={fingerprint}\n" + ("changed=true\n" if changed else "")
                         + ("refreshed=true\n" if fetched else ""))
+    elif args.cmd == "deadline-lineups":
+        from .deadline import write
+        for s in args.seasons:
+            write(int(s))
     elif args.cmd == "site":
         from .site import OUT, export_site
         export_site(args.seasons or None, args.out or OUT)
