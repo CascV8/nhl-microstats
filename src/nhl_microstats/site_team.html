@@ -69,10 +69,10 @@ section { margin-top: 30px; }
   width: 236px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; color: var(--ink);
   text-decoration: none; overflow: hidden; }
 .pl:hover { border-color: var(--accent); }
-.pl img { grid-row: 1 / -1; width: 100px; height: 116px; object-fit: cover; object-position: top; border-radius: 6px; }
+.pl img { grid-row: 1 / -1; width: 100px; height: 96px; object-fit: cover; object-position: top; border-radius: 6px; }
 .pl .who { min-width: 0; margin-top: -3px; }   /* the name's cap height, not its line box, on the top margin */
 .pl .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pl > .pct { grid-column: 2; align-self: end; justify-self: stretch; min-width: 0; font-size: 2.4rem; padding: 12px 0;
+.pl > .pct { grid-column: 2; align-self: end; justify-self: stretch; min-width: 0; font-size: 2.4rem; padding: 10px 0;
   border-radius: 9px; }
 .pl .score { display: block; font: 600 .7rem var(--body); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pl .score b { color: var(--ink); font-weight: 700; }
@@ -168,7 +168,7 @@ function card(p, slot) {
   const goalie = p.pos === "G";
   const href = !p.id ? "#" : `${goalie ? "goalie" : "player"}.html?season=${TEAM.season}&id=${p.id}`;
   const line = goalie ? (p.rec ? `<b>${esc(p.rec)}</b> · <b>${esc(p.sv)}</b> SV% · ${p.gp} GP` : "")
-    : p.gp != null ? `<b>${p.pts}</b> PTS · <b>${p.g}</b> G · <b>${p.a}</b> A · ${p.gp} GP` : "";
+    : p.gp != null ? `<b>${p.pts}</b> P ·<b>${p.g}</b> G · <b>${p.a}</b> A · ${p.gp} GP` : "";
   return `<a class="pl" href="${href}"><img src="${shot(p)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
     <span class="who"><div class="nm">${esc(p.name)}</div><span class="score">${line}</span></span>${box(p.ovr)}</a>`;
 }
