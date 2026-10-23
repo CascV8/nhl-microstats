@@ -29,6 +29,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 import unicodedata
 from pathlib import Path
 
@@ -51,8 +52,13 @@ STATS = "https://api.nhle.com/stats/rest/en"
 TEAM_STATS = [("pointPct", "P%"), ("powerPlayPct", "PP%"), ("penaltyKillPct", "PK%")]
 
 
-def _get(url: str, **kw):
-    r = requests.get(url, timeout=30, **kw)
+def _get(url: str, tries: int = 4, **kw):
+    """GET, waiting and retrying when rate-limited (the NHL's API answers 429 to a burst of 32 roster requests)."""
+    for attempt in range(tries):
+        r = requests.get(url, timeout=30, **kw)
+        if r.status_code != 429 or attempt == tries - 1:
+            break
+        time.sleep(float(r.headers.get("Retry-After") or 0) or 2 ** (attempt + 1))
     r.raise_for_status()
     return r
 
@@ -104,6 +110,7 @@ def refresh_lineups(force: bool = False) -> tuple[str, int]:
             continue
         path.write_text(json.dumps(entry), encoding="utf-8")
         fetched_now += 1
+        time.sleep(0.5)   # spaced out, so the NHL's API doesn't rate-limit the rosters
     return lineups_fingerprint(), fetched_now
 
 
