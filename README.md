@@ -1,4 +1,6 @@
-# nhl-microstats
+# Pattullometrics
+
+The code behind https://pattullometrics.pages.dev. The Python package and its CLI keep the name `nhl-microstats`.
 
 Skater microstats for the last five NHL regular seasons (2021-22 to 2025-26), stored in SQLite,
 with a percentile engine: give it a value, get back where that value would rank in the league.
