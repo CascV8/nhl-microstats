@@ -21,9 +21,12 @@
 [hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
 a { color: var(--accent); }
-.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 24px 16px 48px; }
 header { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: end; justify-content: space-between; margin-bottom: 16px; }
-.nav { margin: 0 0 6px; font: 600 .86rem var(--body); display: flex; gap: 14px; }
+.status b { color: var(--ink); font-weight: 600; }
+.note { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface);
+  border-radius: 6px; padding: 10px 14px; margin: 0 0 14px; max-width: 80ch; }
+.note b { color: var(--accent); }
 h1 { font: 700 2.4rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
 h1 span { color: var(--accent); }
 .status { color: var(--muted); margin: 6px 0 0; font-size: .9rem; }
@@ -40,19 +43,24 @@ input[type="number"] { width: 4.5em; }
 label { display: inline-flex; gap: 6px; align-items: center; font: 600 .78rem var(--body); text-transform: uppercase;
   letter-spacing: .03em; color: var(--muted); }
 button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; width: fit-content; max-width: 100%; }
-table { border-collapse: collapse; width: auto; font-size: .9rem; font-variant-numeric: tabular-nums; }
+/* Table, cells and chips exactly as the skater table (site_index.html), so switching between the two doesn't jump. */
+.table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto;
+  width: fit-content; max-width: 100%; }
+table { border-collapse: collapse; width: auto; font-size: .88rem; font-variant-numeric: tabular-nums; }
+th.c, td.c { width: 3.6em; min-width: 3.6em; text-align: center; padding-inline: 3px; }
+th.c { white-space: normal; line-height: 1.15; vertical-align: bottom; letter-spacing: .04em; }
 th { font: 600 .74rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right;
-  padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer; position: sticky; top: 0; background: var(--surface); }
+  padding: 9px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer; position: sticky; top: 0; background: var(--surface); }
+thead th { height: 35px; }   /* the skater table's header row height, measured: no shift when switching */
 th[aria-sort] { color: var(--ink); }
 th[aria-sort="descending"]::after { content: " ▾"; } th[aria-sort="ascending"]::after { content: " ▴"; }
 th.l, td.l { text-align: left; }
-td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--track); }
 td a { color: var(--ink); font-weight: 600; text-decoration: none; } td a:hover { text-decoration: underline; }
 .dim { color: var(--muted); }
-.pct { display: inline-block; min-width: 3.4em; padding: 3px 7px; border-radius: 4px; font: 700 .95rem var(--display);
+.pct { display: inline-block; min-width: 2.4em; padding: 2px 6px; border-radius: 4px; font: 700 .86rem var(--display);
   text-align: center; color: #fff; }
 .t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg); color: var(--ink) }
 .t-weak { background: var(--weak) } .t-none { background: var(--track); color: var(--muted) }
@@ -64,12 +72,15 @@ td a { color: var(--ink); font-weight: 600; text-decoration: none; } td a:hover 
 <div class="wrap">
   <header>
     <div>
-      <p class="nav"><a href="./">← Home</a></p>
+      <p class="status" style="margin:0 0 6px"><a href="./" style="color:var(--accent);font-weight:600">← Home</a></p>
       <h1>NHL Goalies <span id="season-name"></span></h1>
       <p class="status" id="status">Loading…</p>
+      <p class="status"><a href="nhle.html" style="color:var(--accent);font-weight:600">NHLe prospect cards →</a></p>
     </div>
     <label for="season">Season <select id="season"></select></label>
   </header>
+
+  <p class="note" id="early" hidden></p>
   <div class="controls">
     <input type="search" id="q" placeholder="Search goalies or teams" aria-label="Search goalies or teams">
     <!-- the same position switch as the skater table: All / Forwards / Defense go back to it -->
@@ -108,16 +119,16 @@ const cols = [
   { key: "team", label: "Team", cls: "l", get: g => g.team, cell: g => esc(g.team) },
   { key: "gp", label: "GP", get: g => g.gp, cell: g => g.gp },
   { key: "rec", label: "W-L-OTL", get: g => g.w, cell: g => `${g.w}-${g.l}-${g.otl}` },
-  { key: "overall", label: "Overall", get: g => g.overall ?? -1, cell: g => `<span class="pct ${tier(g.overall)}">${shown(g.overall)}</span>` },
+  { key: "overall", label: "Ovr", full: "Overall", cls: "c", get: g => g.overall ?? -1, cell: g => `<span class="pct ${tier(g.overall)}">${shown(g.overall)}</span>` },
   ...["gsaa_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsaa_gp: "GSAA/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
-    get: g => metric(g, k).pct ?? -1,
+    cls: "c", get: g => metric(g, k).pct ?? -1,
     cell: g => { const m = metric(g, k); return m.value == null ? `<span class="dim">–</span>`
       : `<span class="pct ${tier(m.pct)}" title="${shown(m.pct)} percentile">${fmt[k](m.value)}</span>`; } })),
 ];
 
 function render() {
   const col = cols.find(c => c.key === state.sort) || cols[4];
-  $("head").innerHTML = cols.map(c => `<th class="${c.cls || ""}" data-key="${c.key}" scope="col"
+  $("head").innerHTML = cols.map(c => `<th class="${c.cls || ""}" data-key="${c.key}" scope="col"${c.full ? ` title="${esc(c.full)}"` : ""}
     ${c.key === col.key ? `aria-sort="${state.dir < 0 ? "descending" : "ascending"}"` : ""}>${c.label}</th>`).join("");
   const q = state.q.trim().toLowerCase();
   const rows = DATA.goalies.filter(g => g.gp >= state.mingp && (!state.team || g.team.split(",").includes(state.team))
@@ -135,6 +146,9 @@ async function loadSeason(y) {
   $("season-name").textContent = DATA.early ? `${DATA.name} so far` : DATA.name;
   $("status").textContent = DATA.goalies.length ? `${DATA.goalies.length} goalies · league SV% ${(DATA.league_sv ?? 0).toFixed(3).replace(/^0/, "")}`
     : "No goalie stats for this season yet.";
+  $("early").hidden = !DATA.early;
+  $("early").innerHTML = `<b>Season in progress.</b> ${esc(DATA.name)} goalies are ranked against each other so far, so early-season `
+    + `percentiles swing a lot. A minimum games filter helps.`;
   if (state.mingp == null || state.mingpAuto) { state.mingp = DATA.min_gp ?? 0; state.mingpAuto = true; }
   $("mingp").value = state.mingp;
   const teams = [...new Set(DATA.goalies.flatMap(g => g.team.split(",")).filter(Boolean))].sort();
