@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teams · Pattullometrics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<!-- All 32 teams, alphabetical, each a button to its page (team.html?team=ABBR). Data: data/teams/index.json (teams.py). -->
+<style>
+:root {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f2883a;
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+a { color: var(--accent); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+.nav { margin: 0 0 14px; font: 600 .86rem var(--body); display: flex; gap: 14px; }
+h1 { font: 700 2.6rem/1 var(--display); text-transform: uppercase; letter-spacing: .01em; margin: 0 0 4px; }
+.sub { color: var(--muted); font-weight: 600; margin: 0 0 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 10px; }
+.team { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--ink); text-decoration: none;
+  transition: border-color .15s, transform .15s; }
+.team:hover { border-color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .team:hover { transform: translateY(-2px); } }
+.team:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.team img { width: 64px; height: 44px; object-fit: contain; }
+.team .nm { font: 700 1.15rem/1.05 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.team .rec { color: var(--muted); font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pct { display: inline-grid; place-items: center; min-width: 3em; padding: 7px 8px; border-radius: 7px;
+  font: 700 1.2rem/1 var(--display); color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
+.t-none { background: var(--track); color: var(--muted) }
+.status { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="nav"><a href="./">← Home</a></p>
+  <h1>NHL teams</h1>
+  <p class="sub" id="sub"></p>
+  <p class="status" id="status">Loading…</p>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const ordinal = n => { const v = n % 100, s = v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th"; return n + s; };
+const shown = p => p == null ? "–" : ordinal(Math.min(Math.max(Math.round(p), 1), 99));
+
+(async () => {
+  let d;
+  try { d = await (await fetch("data/teams/index.json")).json(); }
+  catch { $("status").textContent = "No team pages yet."; return; }
+  $("status").hidden = true;
+  $("sub").textContent = `${d.seasonName} · the box is each team's overall rating, its metrics curved against the league`;
+  $("grid").innerHTML = d.teams.map(t => `<a class="team" href="team.html?team=${t.abbrev}">
+    <img src="logos/${t.abbrev}.svg" alt="" onerror="this.style.visibility='hidden'">
+    <span><div class="nm">${esc(t.name)}</div><div class="rec">${esc(t.record)} · ${t.points} pts</div></span>
+    <span class="pct ${tier(t.overall)}" title="Team overall: ${t.rank ? ordinal(t.rank) : "–"} of ${d.teams.length}">${shown(t.overall)}</span></a>`).join("");
+})();
+</script>
+</body>
+</html>

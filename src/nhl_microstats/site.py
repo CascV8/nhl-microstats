@@ -11,11 +11,13 @@ Layout of the output:
     player.html                 the card, loaded from ?season=YYYY&id=NNN
     goalies.html                every goalie in a season, sortable
     goalie.html                 a goalie's card, loaded from ?season=YYYY&id=NNN
-    data/meta.json              seasons, when it was built, games included, games awaiting shift charts
+    teams.html                  all 32 teams; team.html is one team's page, loaded from ?team=ABBR (teams.py)
+    data/meta.json             seasons, when it was built, games included, games awaiting shift charts
     data/player_seasons.json    {player id: [seasons with a card]}, for the player page's season picker
     data/<season>/index.json    one compact row per skater
     data/<season>/players/<id>.json   one card's data (the same shape the cards page embeds)
     data/<season>/goalies.json  every goalie's ratings (goalies.py)
+    data/teams/, logos/         the team pages' data, for the season under way (teams.py)
 
 Everything is written to a temporary folder first and swapped in at the end, so a
 visitor never sees half an update. Complete seasons don't change between games, so their
@@ -35,7 +37,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 from puckscrape._util import start_year
 
-from . import collect, goalies
+from . import collect, goalies, teams
 from .cards import MODES, TEMPLATE, card_data
 from .db import connect
 from .percentile import complete_seasons, season_name
@@ -46,6 +48,7 @@ INDEX_TEMPLATE = Path(__file__).with_name("site_index.html")
 HOME_TEMPLATE = Path(__file__).with_name("site_home.html")
 # published name: template, for the goalie pages
 GOALIE_PAGES = {"goalies.html": "site_goalies.html", "goalie.html": "site_goalie.html"}
+TEAM_PAGES = {"teams.html": "site_teams.html", "team.html": "site_team.html"}
 OUT = collect.ROOT / "site"
 CACHE = collect.DATA / "site_cache"
 # What a season's exported files depend on, besides its own rows: the code and the curves.
@@ -65,7 +68,8 @@ def default_seasons() -> list[int]:
 def code_hash() -> str:
     """Changes whenever the code or templates that shape the site do."""
     h = hashlib.sha256()
-    for name in [*CODE, TEMPLATE.name, INDEX_TEMPLATE.name, HOME_TEMPLATE.name, *GOALIE_PAGES.values()]:
+    for name in [*CODE, "teams.py", TEMPLATE.name, INDEX_TEMPLATE.name, HOME_TEMPLATE.name, *GOALIE_PAGES.values(),
+                 *TEAM_PAGES.values()]:
         h.update(Path(__file__).with_name(name).read_bytes())
     return h.hexdigest()
 
@@ -167,8 +171,13 @@ def export_site(seasons=None, out: Path | str = OUT) -> Path:
     (tmp / "data" / "player_seasons.json").write_text(json.dumps(by_player), encoding="utf-8")
     shutil.copy(HOME_TEMPLATE, tmp / "index.html")
     shutil.copy(INDEX_TEMPLATE, tmp / "microstats.html")
-    for name, src in GOALIE_PAGES.items():
+    for name, src in {**GOALIE_PAGES, **TEAM_PAGES}.items():
         shutil.copy(Path(__file__).with_name(src), tmp / name)
+    newest = max(seasons)
+    try:   # team pages are an extra, like the goalie cards: a site without them beats no site
+        teams.export_teams(tmp / "data" / str(newest), newest, tmp)
+    except Exception as e:
+        log.warning("no team pages (%s)", e)
     # The card template is a fragment (cards.html gets wrapped by whatever shows it); give it a document head.
     head = '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     (tmp / "player.html").write_text(head + TEMPLATE.read_text(encoding="utf-8").replace(

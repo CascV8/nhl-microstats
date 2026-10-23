@@ -26,7 +26,7 @@ h1 { font: 700 clamp(2.6rem, 8vw, 4rem)/.95 var(--display); text-transform: uppe
 h1 { color: var(--bridge-orange); }
 h1 .accent { color: var(--bridge-blue); }   /* PATTULLO in the arch's orange, METRICS in the steel blue */
 
-.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
 .choice { display: flex; flex-direction: column; gap: 10px; padding: 22px 22px 20px; background: var(--surface);
   border: 1px solid var(--line); border-radius: 14px; color: inherit; text-decoration: none;
   transition: border-color .15s, transform .15s; }
@@ -91,6 +91,18 @@ h1 .accent { color: var(--bridge-blue); }   /* PATTULLO in the arch's orange, ME
       </span>
       <span class="status">Star · NHLer · bust, for every season from D-1 to D+5</span>
       <span class="go">Look up a prospect →</span>
+    </a>
+
+    <a class="choice" href="teams.html">
+      <span class="kicker">NHL teams</span>
+      <h2>Team metrics</h2>
+      <p>All 32 teams: their season as percentiles against the league, and their latest lines from Daily Faceoff, every
+        player with their overall rating.</p>
+      <span class="chips" aria-hidden="true">
+        <i>88</i><i>61</i><i>45</i><i>12</i>
+      </span>
+      <span class="status">Lines · power play · penalty kill</span>
+      <span class="go">Browse teams →</span>
     </a>
   </div>
 

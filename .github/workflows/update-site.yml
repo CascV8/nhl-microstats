@@ -77,6 +77,13 @@ jobs:
         id: before
         run: echo "state=${{ hashFiles('nhl-microstats/data/update_state.json') }}" >> "$GITHUB_OUTPUT"
 
+      # The team pages' lineups: Daily Faceoff and NHL rosters, refetched when ours are a few hours old. Deploys when one
+      # changed since the last deploy, even with no new games.
+      - name: Refresh lineups
+        id: lineups
+        working-directory: nhl-microstats
+        run: uv run nhl-microstats lineups || echo "lineups not refreshed; the site keeps the last ones"
+
       - name: Pull new games and rebuild
         id: update
         working-directory: nhl-microstats
@@ -91,14 +98,16 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           if [ "$sha" != "$(cat data/nhle_deployed 2>/dev/null)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            # nothing new from the NHL means no fresh site/ to add the cards to
+          fi
+          # nothing new from the NHL means no fresh site/ to add the cards (or new lineups) to
+          if [ "$sha" != "$(cat data/nhle_deployed 2>/dev/null)" ] || [ "${{ steps.lineups.outputs.changed }}" = "true" ]; then
             [ "${{ steps.update.outputs.changed }}" = "true" ] || uv run nhl-microstats site
           fi
           # web/ arrives with CascV8/NHLe#1; until then the site deploys without the cards
           if [ -d site ] && [ -f ../nhle/web/build.py ]; then python3 ../nhle/web/build.py site functions; fi
 
       - name: Deploy to Cloudflare Pages
-        if: steps.update.outputs.changed == 'true' || steps.nhle.outputs.changed == 'true'
+        if: steps.update.outputs.changed == 'true' || steps.nhle.outputs.changed == 'true' || steps.lineups.outputs.changed == 'true'
         working-directory: nhl-microstats
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -107,10 +116,11 @@ jobs:
           npx --yes wrangler@4 pages project create "$PAGES_PROJECT" --production-branch=main 2>/dev/null || true
           npx --yes wrangler@4 pages deploy site --project-name="$PAGES_PROJECT" --branch=main --commit-dirty=true
           echo "${{ steps.nhle.outputs.sha }}" > data/nhle_deployed
+          [ -z "${{ steps.lineups.outputs.fingerprint }}" ] || echo "${{ steps.lineups.outputs.fingerprint }}" > data/lineups_deployed
 
       # Saved only after a successful deploy: if the deploy fails, the next run redoes the games and deploys them.
       - name: Save data
-        if: success() && (steps.update.outputs.changed == 'true' || steps.nhle.outputs.changed == 'true' || steps.before.outputs.state != hashFiles('nhl-microstats/data/update_state.json'))
+        if: success() && (steps.update.outputs.changed == 'true' || steps.nhle.outputs.changed == 'true' || steps.lineups.outputs.changed == 'true' || steps.lineups.outputs.refreshed == 'true' || steps.before.outputs.state != hashFiles('nhl-microstats/data/update_state.json'))
         uses: actions/cache/save@v4
         with:
           path: |

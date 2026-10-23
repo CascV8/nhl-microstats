@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team · Pattullometrics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<!--
+  A team's page: team.html?team=VAN. Data: data/teams/<ABBR>.json, written by the site build (teams.py) for the season
+  under way. Team metrics are the season so far; the lineup is Daily Faceoff's latest. The power play is drawn as a
+  1-3-1 (a defenceman at the point, the forwards in Daily Faceoff's order across the middle and at the net front: Daily
+  Faceoff doesn't say who plays where), the penalty kill as the box (forwards up, defence back).
+-->
+<style>
+:root {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f2883a; --bridge-blue: #8cb3d9;
+  --gap: 10px;   /* the one spacing for player cards: inside each card, and between cards everywhere */
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+a { color: var(--accent); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+.nav { margin: 0 0 14px; font: 600 .86rem var(--body); display: flex; gap: 14px; }
+h2 { font: 600 .8rem var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+section { margin-top: 30px; }
+.note { color: var(--muted); font-size: .82rem; margin: -4px 0 14px; max-width: 95ch; }
+
+/* percentile boxes: solid tier colour, the number with its suffix (56th) */
+.pct { display: inline-grid; place-items: center; min-width: 3.2em; padding: 6px 8px; border-radius: 6px;
+  font: 700 1.25rem/1 var(--display); color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
+.t-none { background: var(--track); color: var(--muted) }
+
+/* header: logo, name, and the team overall (its label to the left of a big box) */
+.team-head { display: flex; align-items: center; gap: 18px; padding: 18px 20px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 14px; }
+.team-head .logo { display: block; height: 70px; width: 70px; flex: none; }   /* the script crops it and sets its size */
+.team-head .logo svg { display: block; width: 100%; height: 100%; }
+.status { color: var(--muted); }
+.team-head h1 { font: 700 2.6rem/1 var(--display); text-transform: uppercase; letter-spacing: .01em; margin: 0; }
+.team-head .sub { color: var(--muted); margin-top: 6px; font-weight: 600; }
+.team-ovr { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.team-ovr .txt { text-align: right; display: grid; gap: 2px; }
+.team-ovr .k { font: 600 .8rem var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.team-ovr .r { font: 700 1.15rem var(--display); letter-spacing: .02em; }
+.team-ovr .pct { font-size: 3.4rem; min-width: 2.6em; padding: 14px 16px; border-radius: 10px; }
+
+/* team metrics: one square per metric, no container: label centred over a big box */
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, 84px); gap: 16px 12px; }
+.metric { display: grid; justify-items: stretch; align-content: start; gap: 5px; }
+.metric .k { font: 600 .74rem var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: center;
+  white-space: nowrap; }
+.metric .pct { font-size: 1.5rem; aspect-ratio: 1.3; display: grid; place-items: center; padding: 0; border-radius: 7px; }
+.metric .v { font: 600 .78rem var(--body); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+
+/* lineup cards: taller, not wider: photo and name, then the scoring line beside the overall */
+.lines { display: grid; gap: var(--gap); }
+.line { display: grid; grid-template-columns: 40px repeat(3, 236px); gap: var(--gap); align-items: stretch; }
+.line.pair { grid-template-columns: 40px repeat(2, 236px); }
+.line .lab { display: grid; place-items: center; font: 700 .9rem var(--display); letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+.pl { display: grid; grid-template-columns: 100px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 0 var(--gap); padding: var(--gap);
+  width: 236px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; color: var(--ink);
+  text-decoration: none; overflow: hidden; }
+.pl:hover { border-color: var(--accent); }
+.pl img { grid-row: 1 / -1; width: 100px; height: 116px; object-fit: cover; object-position: top; border-radius: 6px; }
+.pl .who { min-width: 0; margin-top: -3px; }   /* the name's cap height, not its line box, on the top margin */
+.pl .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl > .pct { grid-column: 2; align-self: end; justify-self: stretch; min-width: 0; font-size: 2.4rem; padding: 12px 0;
+  border-radius: 9px; }
+.pl .score { display: block; font: 600 .7rem var(--body); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pl .score b { color: var(--ink); font-weight: 700; }
+
+/* view switches */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { font: 600 .82rem var(--body); letter-spacing: .03em; text-transform: uppercase; border: 0; background: none;
+  color: var(--muted); padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+/* special teams: the power play's 1-3-1 and the penalty kill's box, drawn in an offensive / defensive zone */
+.zone { position: relative; display: grid; gap: var(--gap); justify-items: center; padding: 18px 16px 30px; max-width: 820px;
+  border: 1px solid var(--line); border-radius: 14px 14px 60px 60px; background:
+  radial-gradient(circle at 50% 100%, rgba(140,179,217,.10) 0 70px, transparent 71px), var(--bg); }
+.zone .row { display: flex; gap: var(--gap); justify-content: center; }
+.zone .net { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font: 600 .7rem var(--display);
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+/* the power play's zone is flipped: net at the top, the point at the bottom */
+.zone.pp { padding: 30px 16px 18px; border-radius: 60px 60px 14px 14px; background:
+  radial-gradient(circle at 50% 0%, rgba(140,179,217,.10) 0 70px, transparent 71px), var(--bg); }
+.zone.pp .net { bottom: auto; top: 8px; }
+
+.cards { display: flex; flex-wrap: wrap; gap: var(--gap); }
+@media (max-width: 800px) {
+  .line, .line.pair { grid-template-columns: 1fr; }
+  .line .lab { place-items: start; }
+  .team-head { flex-wrap: wrap; } .team-ovr { margin-left: 0; }
+  .team-head h1 { font-size: 2rem; }
+  .zone .row { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="nav"><a href="teams.html">← All teams</a><a href="./">Home</a></p>
+  <p class="status" id="status">Loading…</p>
+  <div id="page" hidden>
+  <header class="team-head" id="head"></header>
+
+  <section>
+    <h2>Team metrics</h2>
+    <div class="metrics" id="metrics"></div>
+  </section>
+
+  <section>
+    <div class="bar"><h2 style="margin:0">Lineup</h2>
+      <div class="seg" role="group" aria-label="Lineup view">
+        <button type="button" data-view="ev" aria-pressed="true">Lines</button>
+        <button type="button" data-view="pp" aria-pressed="false">Power play</button>
+        <button type="button" data-view="pk" aria-pressed="false">Penalty kill</button>
+      </div>
+      <div class="seg" role="group" aria-label="Unit" id="units" hidden></div>
+    </div>
+    <p class="note" id="lineup-note"></p>
+    <div id="view-ev">
+      <div class="lines" id="forwards"></div>
+      <h2 style="margin-top:18px">Defence</h2>
+      <div class="lines" id="defence"></div>
+    </div>
+    <div id="view-st" hidden><div class="zone" id="zone"></div></div>
+    <!-- the goalies (and everything below) stay put whichever lineup view is on -->
+    <h2 style="margin-top:18px">Goalies</h2>
+    <div class="lines" id="goalies"></div>
+  </section>
+
+  <section>
+    <h2>Extras</h2>
+    <div class="cards" id="extras"></div>
+    <h2 style="margin-top:18px">Injured</h2>
+    <div class="cards" id="injured"></div>
+  </section>
+  </div>
+</div>
+
+<script>
+// ── Helpers ────────────────────────────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const ordinal = n => { const v = n % 100, s = v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th"; return n + s; };
+const shown = p => p == null ? "–" : ordinal(Math.min(Math.max(Math.round(p), 1), 99));
+const box = (p, extra = "") => `<span class="pct ${tier(p)} ${extra}">${shown(p)}</span>`;
+let TEAM;
+const shot = p => p.id ? `https://assets.nhle.com/mugs/nhl/${TEAM.season}${TEAM.season + 1}/${TEAM.abbrev}/${p.id}.png` : "";
+const SLOT = { LW: "LW", C: "C", RW: "RW", LD: "LD", RD: "RD", G1: "Starter", G2: "Backup", L: "LW", R: "RW" };
+
+// The player card: a big photo down the left; the name, the scoring line under it (goalies: record and SV%), the overall.
+function card(p, slot) {
+  const goalie = p.pos === "G";
+  const href = !p.id ? "#" : `${goalie ? "goalie" : "player"}.html?season=${TEAM.season}&id=${p.id}`;
+  const line = goalie ? (p.rec ? `<b>${esc(p.rec)}</b> · <b>${esc(p.sv)}</b> SV% · ${p.gp} GP` : "")
+    : p.gp != null ? `<b>${p.pts}</b> PTS · <b>${p.g}</b> G · <b>${p.a}</b> A · ${p.gp} GP` : "";
+  return `<a class="pl" href="${href}"><img src="${shot(p)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <span class="who"><div class="nm">${esc(p.name)}</div><span class="score">${line}</span></span>${box(p.ovr)}</a>`;
+}
+
+// ── Header and team metrics ────────────────────────────────────────────────────────────────────────────
+function render() {
+document.title = `${TEAM.name} · Pattullometrics`;
+$("head").innerHTML = `<span class="logo" id="logo"></span>
+  <div class="titles"><h1>${esc(TEAM.name)}</h1><div class="sub">${TEAM.seasonName} · ${TEAM.record} · ${TEAM.points} pts · percentiles at 5v5</div></div>
+  <div class="team-ovr" title="Team metrics overall: categories and goaltending averaged, curved against all ${TEAM.teams} teams">
+    <div class="txt"><span class="k">Team overall</span><span class="r">${ordinal(TEAM.rank)} of ${TEAM.teams}</span></div>${box(TEAM.overall)}</div>`;
+
+loadLogo(); document.fonts.ready.then(fitLogo); addEventListener("resize", fitLogo);
+
+// Team metrics, in order: a coloured percentile box each; P%, PP% and PK% with the stat itself under it.
+const METRICS = [...TEAM.teamStats, ...Object.entries(TEAM.profile).map(([k, v]) => ({ k, pct: v }))];
+$("metrics").innerHTML = METRICS.map(m => `<div class="metric"><span class="k">${esc(m.k)}</span>${box(m.pct)}
+  ${m.value ? `<span class="v">${esc(m.value)}</span>` : ""}</div>`).join("");
+
+// ── Lineup: 5v5 ────────────────────────────────────────────────────────────────────────────────────────
+const upd = new Date(TEAM.lineupSource.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+$("lineup-note").innerHTML = TEAM.lineupSource.updated ? `From <a href="${esc(TEAM.lineupSource.url)}">${esc(TEAM.lineupSource.site)}</a>,
+  updated ${esc(upd)}${TEAM.lineupSource.via ? ` (via ${esc(TEAM.lineupSource.via)})` : ""}.` : "No lineup from Daily Faceoff yet.";
+$("forwards").innerHTML = TEAM.lines.map((l, i) => `<div class="line"><div class="lab">L${i + 1}</div>${l.map(p => card(p)).join("")}</div>`).join("");
+$("defence").innerHTML = TEAM.pairs.map((pr, i) => `<div class="line pair"><div class="lab">D${i + 1}</div>${pr.map(p => card(p)).join("")}</div>`).join("");
+$("goalies").innerHTML = `<div class="line pair"><div class="lab">G</div>${TEAM.goalies.map((g, j) => card(g, j ? "Backup" : "Starter")).join("")}</div>`;
+$("extras").innerHTML = TEAM.extras.map(p => card(p, p.pos === "G" ? "G" : SLOT[p.slot] ?? p.slot)).join("") || `<p class="note">None.</p>`;
+$("injured").innerHTML = TEAM.injured.map(p => card(p, "Injured")).join("") || `<p class="note">None.</p>`;
+// open on a view with #power-play or #penalty-kill (shareable)
+if (location.hash === "#power-play") view = "pp";
+if (location.hash === "#penalty-kill") view = "pk";
+show();
+$("status").hidden = true; $("page").hidden = false; fitLogo();
+}
+
+// The logo, cropped to its drawing (the NHL's SVGs sit on a padded canvas) and as tall as the name and the line under it.
+async function loadLogo() {
+  try {
+    const svg = await (await fetch(`logos/${TEAM.abbrev}.svg`)).text();
+    $("logo").innerHTML = svg;
+    const el = $("logo").querySelector("svg"), b = el.getBBox();
+    el.setAttribute("viewBox", `${b.x} ${b.y} ${b.width} ${b.height}`);
+    el.removeAttribute("width"); el.removeAttribute("height");
+    $("logo").dataset.aspect = b.width / b.height;
+    fitLogo();
+  } catch { $("logo").hidden = true; }
+}
+function fitLogo() {
+  const t = document.querySelector("#head .titles"), l = $("logo");
+  if (!t || !l) return;
+  const h = t.offsetHeight;
+  Object.assign(l.style, { height: h + "px", width: h * (+l.dataset.aspect || 1) + "px" });
+}
+
+// ── Lineup: special teams ──────────────────────────────────────────────────────────────────────────────
+// Power play, 1-3-1: a defenceman at the point; the forwards, in Daily Faceoff's order, across the middle (left flank,
+// bumper, right flank) and at the net front. Penalty kill, the box: forwards up, defence back.
+const slotCard = p => card(p, SLOT[p.pos] ?? p.pos);   // special teams: the player's own position, no PP / PK roles
+function drawPP(u) {
+  const d = u.filter(p => p.pos === "D"), f = u.filter(p => p.pos !== "D");
+  const point = d[0] || f.shift(), rest = [...d.slice(1), ...f];
+  const [l, bump, r, net] = rest;
+  // drawn net at the top, so the quarterback at the point is at the bottom
+  return `<span class="net">Net</span><div class="row">${net ? slotCard(net) : ""}</div>
+    <div class="row">${[l, bump, r].filter(Boolean).map(slotCard).join("")}</div>
+    <div class="row">${point ? slotCard(point) : ""}</div>`;
+}
+function drawPK(u) {
+  const f = u.filter(p => p.pos !== "D"), d = u.filter(p => p.pos === "D");
+  const top = [...f, ...d].slice(0, 2), back = [...f, ...d].slice(2);
+  return `<div class="row wide">${top.map(slotCard).join("")}</div>
+    <div class="row wide">${back.map(slotCard).join("")}</div><span class="net">Net</span>`;
+}
+var view = "ev", unit = 0;
+function show() {
+  for (const b of document.querySelectorAll("[data-view]")) b.setAttribute("aria-pressed", b.dataset.view === view);
+  $("view-ev").hidden = view !== "ev"; $("view-st").hidden = view === "ev"; $("units").hidden = view === "ev";
+  if (view === "ev") return;
+  const us = (view === "pp" ? TEAM.pp : TEAM.pk).filter(u => u.length), k = view.toUpperCase();
+  unit = Math.min(unit, us.length - 1);
+  $("units").innerHTML = us.map((_, i) => `<button type="button" data-unit="${i}" aria-pressed="${i === unit}">${k}${i + 1}</button>`).join("");
+  $("zone").innerHTML = (view === "pp" ? drawPP : drawPK)(us[unit]);
+  $("zone").classList.toggle("pp", view === "pp");
+}
+document.addEventListener("click", e => {
+  const v = e.target.closest("[data-view]"), u = e.target.closest("[data-unit]");
+  if (v) { view = v.dataset.view; unit = 0; show(); }
+  if (u) { unit = +u.dataset.unit; show(); }
+});
+
+// ── Load ───────────────────────────────────────────────────────────────────────────────────────────────
+(async () => {
+  const abbr = (new URLSearchParams(location.search).get("team") || "").toUpperCase().replace(/[^A-Z]/g, "");
+  try {
+    if (!abbr) throw new Error("no team");
+    const r = await fetch(`data/teams/${abbr}.json`);
+    if (!r.ok) throw new Error(r.status);
+    TEAM = await r.json();
+  } catch {
+    $("status").innerHTML = `No team page for that team. <a href="teams.html">All teams</a>`;
+    return;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
