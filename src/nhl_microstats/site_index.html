@@ -95,9 +95,9 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
       <button type="button" data-pos="all" aria-pressed="true">All</button>
       <button type="button" data-pos="F" aria-pressed="false">Forwards</button>
       <button type="button" data-pos="D" aria-pressed="false">Defense</button>
-      <button type="button" data-goalies aria-pressed="false">Goalies</button>
+      <button type="button" data-pos="G" aria-pressed="false">Goalies</button>
     </div>
-    <div class="seg" role="group" aria-label="Stat basis">
+    <div class="seg" role="group" aria-label="Stat basis" id="mode-seg">
       <button type="button" data-mode="5v5" aria-pressed="true">5v5</button>
       <button type="button" data-mode="all" aria-pressed="false">All situations</button>
     </div>
@@ -135,13 +135,32 @@ const pctCell = p => p == null || !isFinite(p) ? `<span class="dim">–</span>`
   : `<span class="pct ${tier(p)}">${Math.min(Math.max(Math.round(p), 1), 99)}</span>`;
 
 const MIN_GP = 10;   // default sample-size filter; visitors can lower it
-const state = { season: null, pos: "all", mode: "5v5", q: "", team: "", mingp: MIN_GP, sort: "p", dir: -1 };
+const state = { season: null, pos: "all", mode: "5v5", q: "", team: "", mingp: MIN_GP, sort: "p", dir: -1, gsort: "overall", gdir: -1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem("site-state") || "{}"), { q: "" }); } catch (e) {}
 // ?pos=F|D|all and ?season= (from the goalies table's buttons) win over the remembered view
 { const u = new URLSearchParams(location.search);
-  if (["all", "F", "D"].includes(u.get("pos"))) state.pos = u.get("pos");
+  if (["all", "F", "D", "G"].includes(u.get("pos"))) state.pos = u.get("pos");
   if (/^\d{4}$/.test(u.get("season") || "")) state.season = +u.get("season"); }
-let META, DATA, CATS = [];
+let META, DATA, GDATA, CATS = [];
+
+// Goalies (data/<season>/goalies.json): the same table, its own columns. Values in boxes coloured by percentile.
+const GFMT = { gsaa_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
+const gmetric = (g, k) => g.metrics.find(m => m.key === k);
+const goalieRows = () => (GDATA?.goalies || []).map(g => ({ ...g, team: g.team.replace(/,/g, "/"), pos: "G", group: "G" }));
+const goalieCols = () => [
+  { key: "name", label: "Player", cls: "l", get: g => g.name,
+    cell: g => `<a href="goalie.html?season=${state.season}&id=${g.id}">${esc(g.name)}</a>` },
+  { key: "team", label: "Team", cls: "l", get: g => g.team, cell: g => esc(g.team) },
+  { key: "pos", label: "Pos", cls: "l", get: g => "G", cell: () => "G" },
+  { key: "gp", label: "GP", get: g => g.gp, cell: g => g.gp },
+  { key: "rec", label: "W-L-OTL", get: g => [g.w, -g.l], cell: g => `${g.w}-${g.l}-${g.otl}` },
+  { key: "overall", label: "Ovr", full: "Overall", cls: "c", get: g => [g.overall ?? -1, g.gp], cell: g => pctCell(g.overall) },
+  ...["gsaa_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsaa_gp: "GSAA/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
+    full: { gsaa_gp: "Goals saved above average per game", sv: "Save percentage", ga_gp: "Goals against per game" }[k], cls: "c",
+    get: g => [gmetric(g, k).pct ?? -1, g.gp],
+    cell: g => { const m = gmetric(g, k); return m.value == null ? `<span class="dim">–</span>`
+      : `<span class="pct ${tier(m.pct)}" title="${shown(m.pct)} percentile">${GFMT[k](m.value)}</span>`; } })),
+];
 
 const cols = () => [
   { key: "name", label: "Player", cls: "l", get: r => r.name,
@@ -162,53 +181,73 @@ const cols = () => [
 function render() {
   for (const b of document.querySelectorAll("[data-pos]")) b.setAttribute("aria-pressed", b.dataset.pos === state.pos);
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", b.dataset.mode === state.mode);
-  const c = cols(), col = c.find(x => x.key === state.sort) || c[5];
+  const G = state.pos === "G", sortKey = G ? "gsort" : "sort", dirKey = G ? "gdir" : "dir";
+  $("mode-seg").style.visibility = G ? "hidden" : "";   // 5v5 / all situations is for skaters; hidden in place, so nothing moves
+  const c = G ? goalieCols() : cols(), col = c.find(x => x.key === state[sortKey]) || c[5];
   $("head").innerHTML = c.map(x => `<th class="${x.cls || ""}" data-key="${x.key}" scope="col"${x.full ? ` title="${esc(x.full)}"` : ""}
-    ${x.key === col.key ? `aria-sort="${state.dir < 0 ? "descending" : "ascending"}"` : ""}>${esc(x.label)}</th>`).join("");
+    ${x.key === col.key ? `aria-sort="${state[dirKey] < 0 ? "descending" : "ascending"}"` : ""}>${esc(x.label)}</th>`).join("");
   const q = state.q.trim().toLowerCase();
-  const rows = DATA.rows.filter(r => (state.pos === "all" || r.group === state.pos) && r.gp >= state.mingp
+  const source = G ? goalieRows() : DATA.rows;
+  const rows = source.filter(r => (G || state.pos === "all" || r.group === state.pos) && r.gp >= state.mingp
       && (!state.team || r.team.split("/").includes(state.team))
       && (!q || r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q)))
     .sort((a, b) => { const x = col.get(a), y = col.get(b);
-      return (typeof x === "string" ? x.localeCompare(y) : Array.isArray(x) ? byKey(x, y) : x - y) * state.dir; });
+      return (typeof x === "string" ? x.localeCompare(y) : Array.isArray(x) ? byKey(x, y) : x - y) * state[dirKey]; });
   $("rows").innerHTML = rows.map(r => `<tr>${c.map(x => `<td class="${x.cls || ""}">${x.cell(r)}</td>`).join("")}</tr>`).join("")
-    || `<tr><td class="l" colspan="${c.length}">${DATA.rows.some(r => r.gp < state.mingp)
-         && !DATA.rows.some(r => r.gp >= state.mingp)
+    || `<tr><td class="l" colspan="${c.length}">${source.some(r => r.gp < state.mingp)
+         && !source.some(r => r.gp >= state.mingp)
          ? `No one has ${state.mingp}+ games yet this season. Lower <b>Min GP</b> to see everyone (small samples swing a lot).`
-         : "No players match."}</td></tr>`;
+         : G && !source.length ? "No goalie stats for this season." : "No players match."}</td></tr>`;
+  status();
   try { localStorage.setItem("site-state", JSON.stringify(state)); } catch (e) {}
 }
 
 async function loadSeason(y) {
   state.season = y;
-  DATA = await (await fetch(`data/${y}/index.json`)).json();
+  const [d, g] = await Promise.all([fetch(`data/${y}/index.json`).then(r => r.json()),
+    fetch(`data/${y}/goalies.json`).then(r => r.ok ? r.json() : null).catch(() => null)]);
+  DATA = d; GDATA = g;
   CATS = Object.keys(DATA.sections);
   const s = META.seasons.find(s => s.season == y);
   $("season-name").textContent = DATA.early ? `${DATA.season} so far` : DATA.season;
   const built = new Date(META.built);
-  $("status").innerHTML = `<b>${s.players}</b> skaters` + (s.games != null ? ` · <b>${s.games}</b> games` : "") +
-    (s.awaiting_shifts.length ? ` · ${s.awaiting_shifts.length} awaiting NHL shift charts (left out until posted)` : "") +
-    ` · updated ${built.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
+  const when = ` · updated ${built.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
+  STATUS = {
+    skaters: `<b>${s.players}</b> skaters` + (s.games != null ? ` · <b>${s.games}</b> games` : "") +
+      (s.awaiting_shifts.length ? ` · ${s.awaiting_shifts.length} awaiting NHL shift charts (left out until posted)` : "") + when,
+    goalies: `<b>${GDATA?.goalies?.length ?? 0}</b> goalies` + (GDATA?.league_sv ? ` · league SV% ${GDATA.league_sv.toFixed(3).replace(/^0/, "")}` : "") + when,
+    skFoot: `Percentiles compare each player with every ${DATA.vs_season} player-season at his position ` +
+      `with ${DATA.min_toi["5v5"]}+ minutes at 5v5 or ${DATA.min_toi.all}+ in all situations. Players below that still get ` +
+      `percentiles, from the same curves. Data: NHL play-by-play, shift charts and NHL Edge.`,
+    gFoot: GDATA ? `Goalie values are coloured by their percentile among the ${GDATA.pool} goalies with ${GDATA.min_gp}+ games this ` +
+      `season. GSAA/GP: goals saved above an average goalie facing the same shots, per game. Ovr averages the three percentiles, ` +
+      `curved against the same goalies, so 50 is a median goalie. Data: the NHL's goalie stats.` : "",
+  };
   $("early").hidden = !DATA.early;
   $("early").innerHTML = `<b>Season in progress.</b> ${esc(DATA.season)} numbers are ranked against full seasons from ` +
     `${esc(DATA.vs_season)}, so early-season percentiles swing a lot. A minimum games filter helps.`;
-  const teams = [...new Set(DATA.rows.flatMap(r => r.team.split("/")))].sort();
+  const teams = [...new Set([...DATA.rows, ...goalieRows()].flatMap(r => r.team.split("/")))].filter(Boolean).sort();
   $("team").innerHTML = `<option value="">All</option>` + teams.map(t => `<option>${esc(t)}</option>`).join("");
   if (!teams.includes(state.team)) state.team = "";
   $("team").value = state.team;
-  $("foot").textContent = `Percentiles compare each player with every ${DATA.vs_season} player-season at his position ` +
-    `with ${DATA.min_toi["5v5"]}+ minutes at 5v5 or ${DATA.min_toi.all}+ in all situations. Players below that still get ` +
-    `percentiles, from the same curves. Data: NHL play-by-play, shift charts and NHL Edge.`;
   render();
+}
+
+// the status line and footnote follow the view: skaters or goalies
+let STATUS = null;
+function status() {
+  if (!STATUS) return;
+  const G = state.pos === "G";
+  $("status").innerHTML = G ? STATUS.goalies : STATUS.skaters;
+  $("foot").textContent = G ? STATUS.gFoot : STATUS.skFoot;
 }
 
 document.addEventListener("click", e => {
   const b = e.target.closest("button"), th = e.target.closest("th");
   if (b?.dataset.pos) { state.pos = b.dataset.pos; render(); }
-  if (b && "goalies" in b.dataset) location.href = `goalies.html?season=${state.season}`;   // goalies have their own table
   if (b?.dataset.mode) { state.mode = b.dataset.mode; render(); }
-  if (th) { const k = th.dataset.key;
-    state.dir = state.sort === k ? -state.dir : (["name", "team", "pos"].includes(k) ? 1 : -1); state.sort = k; render(); }
+  if (th) { const k = th.dataset.key, G = state.pos === "G", sk = G ? "gsort" : "sort", dk = G ? "gdir" : "dir";
+    state[dk] = state[sk] === k ? -state[dk] : (["name", "team", "pos"].includes(k) ? 1 : -1); state[sk] = k; render(); }
 });
 $("q").addEventListener("input", e => { state.q = e.target.value; render(); });
 $("team").addEventListener("change", e => { state.team = e.target.value; render(); });
