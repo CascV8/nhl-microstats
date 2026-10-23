@@ -110,6 +110,7 @@ def update_once(season=None, out=OUT, deploy: str | None = None, force: bool = F
     log.info("%d games changed: %s", len(changed), changed[:10])
 
     bios = pd.read_parquet(collect.collect_bios(y, refresh=True))
+    collect.collect_goalies(y, refresh=True)   # goalie totals grow with every game too
     played = _players_in(y, changed)
     collect.collect_edge(y, bios["player_id"], refresh=played)
     collect.collect_shot_speed(y, bios["player_id"], refresh=played)
