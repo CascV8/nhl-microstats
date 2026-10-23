@@ -331,8 +331,22 @@ def _on_off_ga(goals: pd.DataFrame, by_game: pd.DataFrame, shifts: pd.DataFrame,
     return ratio[(tot[secs] > 0) & (off_ga > 0) & (off_secs > 0)].rename(name)
 
 
-def build_season(season) -> None:
-    y = start_year(season)
+def goalie_xg(ev: pd.DataFrame) -> pd.DataFrame:
+    """Per goalie: the unblocked shots he faced, their xG and the goals on them, for GSAx (goalies.py)."""
+    faced = ev[(ev["unblocked"] == 1) & ev["goalie_in_net_id"].notna()]
+    return (faced.groupby(faced["goalie_in_net_id"].astype("int64").rename("player_id"))
+            .agg(shots=("xg", "size"), xga=("xg", "sum"), goals=("is_goal", "sum")).reset_index())
+
+
+def season_attempts(y: int) -> pd.DataFrame:
+    """Every shot attempt of season ``y`` with its xG (as build_season scores them), for goalie_xg alone."""
+    pbp, shifts = _load(y)
+    team_of = shifts.drop_duplicates(["game_id", "player_id"]).set_index(["game_id", "player_id"])["team_abbrev"]
+    return attempts(pbp, score_shots(pbp), team_of)
+
+
+def _load(y: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Season ``y``'s regular-season play-by-play and shift charts, games without shift charts left out."""
     log.info("%d-%02d: loading", y, (y + 1) % 100)
     pbp, shifts = collect.load_games(y)
     # The NHL has no shift charts for a few games (57 at the end of 2024-25). Without them there's
@@ -344,6 +358,12 @@ def build_season(season) -> None:
     # Some shift charts carry another game's shifts too (2025020565 has VGK-SJS in it).
     teams = pbp.drop_duplicates("game_id").melt("game_id", ["home_team", "away_team"], value_name="team_abbrev")
     shifts = shifts.merge(teams[["game_id", "team_abbrev"]].astype({"team_abbrev": "string"}), on=["game_id", "team_abbrev"])
+    return pbp, shifts
+
+
+def build_season(season) -> None:
+    y = start_year(season)
+    pbp, shifts = _load(y)
     bios = pd.read_parquet(collect.DATA / f"bios_{y}.parquet")
     skaters = set(bios["player_id"].astype(int))
 
@@ -351,6 +371,7 @@ def build_season(season) -> None:
     shots = score_shots(pbp)
     ev = attempts(pbp, shots, team_of)
     log.info("%d-%02d: %d attempts, %d unblocked scored", y, (y + 1) % 100, len(ev), len(shots))
+    goalie_xg(ev).to_parquet(collect.DATA / f"goalie_xg_{y}.parquet", index=False)
 
     goals = ev[ev["is_goal"] == 1]
     by_game = toi_by_game(shifts, skaters)

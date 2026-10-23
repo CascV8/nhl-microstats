@@ -144,7 +144,7 @@ try { Object.assign(state, JSON.parse(localStorage.getItem("site-state") || "{}"
 let META, DATA, GDATA, CATS = [];
 
 // Goalies (data/<season>/goalies.json): the same table, its own columns. Values in boxes coloured by percentile.
-const GFMT = { gsaa_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
+const GFMT = { gsax_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
 const gmetric = (g, k) => g.metrics.find(m => m.key === k);
 const goalieRows = () => (GDATA?.goalies || []).map(g => ({ ...g, team: g.team.replace(/,/g, "/"), pos: "G", group: "G" }));
 const goalieCols = () => [
@@ -155,8 +155,8 @@ const goalieCols = () => [
   { key: "gp", label: "GP", get: g => g.gp, cell: g => g.gp },
   { key: "rec", label: "W-L-OTL", get: g => [g.w, -g.l], cell: g => `${g.w}-${g.l}-${g.otl}` },
   { key: "overall", label: "Ovr", full: "Overall", cls: "c", get: g => [g.overall ?? -1, g.gp], cell: g => pctCell(g.overall) },
-  ...["gsaa_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsaa_gp: "GSAA/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
-    full: { gsaa_gp: "Goals saved above average per game", sv: "Save percentage", ga_gp: "Goals against per game" }[k], cls: "c",
+  ...["gsax_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsax_gp: "GSAx/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
+    full: { gsax_gp: "Goals saved above expected per game", sv: "Save percentage", ga_gp: "Goals against per game" }[k], cls: "c",
     get: g => [gmetric(g, k).pct ?? -1, g.gp],
     cell: g => { const m = gmetric(g, k); return m.value == null ? `<span class="dim">–</span>`
       : `<span class="pct ${tier(m.pct)}" title="${GFMT[k](m.value)}">${m.pct == null ? "–" : shown(m.pct)}</span>`; } })),
@@ -220,7 +220,7 @@ async function loadSeason(y) {
       `with ${DATA.min_toi["5v5"]}+ minutes at 5v5 or ${DATA.min_toi.all}+ in all situations. Players below that still get ` +
       `percentiles, from the same curves. Data: NHL play-by-play, shift charts and NHL Edge.`,
     gFoot: GDATA ? `Goalie percentiles are curved against the ${GDATA.pool} goalies with ${GDATA.min_gp}+ games this ` +
-      `season (hover a box for the stat itself). GSAA/GP: goals saved above an average goalie facing the same shots, per game. Ovr averages the three percentiles, ` +
+      `season (hover a box for the stat itself). GSAx/GP: goals saved above expected (the xG of the unblocked shots faced, minus the goals on them), per game. Ovr averages the three percentiles, ` +
       `curved against the same goalies, so 50 is a median goalie. Data: the NHL's goalie stats.` : "",
   };
   $("early").hidden = !DATA.early;
