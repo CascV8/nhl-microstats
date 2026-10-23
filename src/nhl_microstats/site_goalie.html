@@ -81,12 +81,12 @@ async function show(y, seasons) {
       <div><div class="nm">${esc(g.name)}</div><div class="ps">${esc(g.team.replace(/,/g, " / "))} · ${esc(data.name)}${data.early ? " so far" : ""}</div></div>
       <div class="ovr"><span class="pct ${tier(g.overall)}">${shown(g.overall)}</span><span class="k">Overall</span></div></div>
     <div class="metrics">${g.metrics.map(m => `<div class="m"><span class="k">${esc(m.label)}</span>
-      <span class="pct ${tier(m.pct)}">${m.value == null ? "–" : fmt[m.key](m.value)}</span>
-      <span class="p">${m.pct == null ? "–" : ordinal(shown(m.pct)) + " percentile"}</span></div>`).join("")}</div>
+      <span class="pct ${tier(m.pct)}">${m.pct == null ? "–" : ordinal(shown(m.pct))}</span>
+      <span class="p">${m.value == null ? "–" : fmt[m.key](m.value)}</span></div>`).join("")}</div>
     <div class="line"><span><b>${g.gp}</b> GP</span><span><b>${g.w}-${g.l}-${g.otl}</b> W-L-OTL</span><span><b>${g.so}</b> SO</span>
       ${g.qualified ? "" : `<span>under ${data.min_gp} GP: rated against the qualified goalies</span>`}</div>
   </article>`;
-  $("foot").textContent = `Percentiles among the ${data.pool} goalies with ${data.min_gp}+ games in ${data.name}; league SV% `
+  $("foot").textContent = `Percentiles curved against the ${data.pool} goalies with ${data.min_gp}+ games in ${data.name}; league SV% `
     + `${(data.league_sv ?? 0).toFixed(3).replace(/^0/, "")}. GSAA/GP: goals saved above an average goalie facing the same shots, `
     + "per game. GA/GP: goals against per game (fewer is better). Overall averages the three percentiles and is curved against "
     + "the same goalies, so 50 is a median goalie.";

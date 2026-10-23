@@ -159,7 +159,7 @@ const goalieCols = () => [
     full: { gsaa_gp: "Goals saved above average per game", sv: "Save percentage", ga_gp: "Goals against per game" }[k], cls: "c",
     get: g => [gmetric(g, k).pct ?? -1, g.gp],
     cell: g => { const m = gmetric(g, k); return m.value == null ? `<span class="dim">–</span>`
-      : `<span class="pct ${tier(m.pct)}" title="${shown(m.pct)} percentile">${GFMT[k](m.value)}</span>`; } })),
+      : `<span class="pct ${tier(m.pct)}" title="${GFMT[k](m.value)}">${m.pct == null ? "–" : shown(m.pct)}</span>`; } })),
 ];
 
 const cols = () => [
@@ -219,8 +219,8 @@ async function loadSeason(y) {
     skFoot: `Percentiles compare each player with every ${DATA.vs_season} player-season at his position ` +
       `with ${DATA.min_toi["5v5"]}+ minutes at 5v5 or ${DATA.min_toi.all}+ in all situations. Players below that still get ` +
       `percentiles, from the same curves. Data: NHL play-by-play, shift charts and NHL Edge.`,
-    gFoot: GDATA ? `Goalie values are coloured by their percentile among the ${GDATA.pool} goalies with ${GDATA.min_gp}+ games this ` +
-      `season. GSAA/GP: goals saved above an average goalie facing the same shots, per game. Ovr averages the three percentiles, ` +
+    gFoot: GDATA ? `Goalie percentiles are curved against the ${GDATA.pool} goalies with ${GDATA.min_gp}+ games this ` +
+      `season (hover a box for the stat itself). GSAA/GP: goals saved above an average goalie facing the same shots, per game. Ovr averages the three percentiles, ` +
       `curved against the same goalies, so 50 is a median goalie. Data: the NHL's goalie stats.` : "",
   };
   $("early").hidden = !DATA.early;
