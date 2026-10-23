@@ -9,13 +9,12 @@ The site build (site.py) then writes, for the season under way:
     logos/<ABBR>.svg            the team's logo, served with the site so the page can read and crop it (the NHL's
                                 asset server allows no cross-origin reads)
 
-Team metrics, all from the season so far, not tonight's lineup:
-    P%, PP%, PK%     NHL stats, each curved against every team-season of the past PAST_SEASONS complete seasons
-                     (the skaters' fitted logistic curves, curves.fit)
+Team metrics, all from the season so far, not tonight's lineup, each shown as a rank among the 32 teams (1st best):
+    P%, PP%, PK%     NHL stats
     categories       each skater category's 5v5 percentile, averaged over every skater who played for the team,
                      weighted by ice time (Competition left out)
     Goaltending      the team's goalies' overall ratings, weighted by games
-    overall          the categories and Goaltending averaged, then ranked against all 32 teams (mid-ranks)
+    overall          the average of a team's metric ranks, ranked again
 
 Lineups: Daily Faceoff's line combinations (the __NEXT_DATA__ JSON on each team's page), matched to NHL player ids
 by name against the team's NHL roster. Daily Faceoff's slots: f1-f4 forward lines, d1-d3 pairs, g, pp1-pp2,
@@ -35,17 +34,15 @@ from pathlib import Path
 
 import requests
 
-from . import collect, curves
+from . import collect
 from .percentile import season_name
 
 log = logging.getLogger("nhl_microstats.teams")
 
 LINEUPS = collect.DATA / "lineups"          # <ABBR>.json: Daily Faceoff's combinations and the NHL roster, as fetched
-SUMMARIES = collect.DATA / "team_summary"   # <year>.json: the NHL's team summary for a complete season (never changes)
 LOGOS = collect.DATA / "logos"              # <ABBR>.svg: the NHL's dark-background logos, refreshed every LOGO_DAYS
 LOGO_DAYS = 30
 REFRESH_HOURS = 6
-PAST_SEASONS = 10
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"}
 NHL = "https://api-web.nhle.com/v1"
 STATS = "https://api.nhle.com/stats/rest/en"
@@ -127,17 +124,6 @@ def _summary(y: int) -> list[dict]:
     return _get(f"{STATS}/team/summary", params={"cayenneExp": f"seasonId={y}{y + 1} and gameTypeId=2", "limit": -1}).json()["data"]
 
 
-def _past_summaries(y: int) -> list[dict]:
-    """Every team-season of the PAST_SEASONS complete seasons before ``y`` (cached: they don't change)."""
-    SUMMARIES.mkdir(parents=True, exist_ok=True)
-    out = []
-    for past in range(y - PAST_SEASONS, y):
-        path = SUMMARIES / f"{past}.json"
-        if not path.exists():
-            path.write_text(json.dumps(_summary(past)), encoding="utf-8")
-        out += json.loads(path.read_text(encoding="utf-8"))
-    return out
-
 
 def _logo(abbr: str, out: Path) -> None:
     """Copy the team's logo into the site, fetching it when ours is missing or older than LOGO_DAYS."""
@@ -190,8 +176,11 @@ def _teams_of(team: str) -> list[str]:
     return [t for t in re.split(r"[/,]", team or "") if t]
 
 
-def _mid_rank(pool: list[float], v: float) -> float:
-    return 100 * (sum(1 for x in pool if x < v) + sum(1 for x in pool if x == v) / 2) / len(pool)
+def _ranks(values: dict[str, float | None], lower_better: bool = False) -> dict[str, int | None]:
+    """Each team's rank, 1 the best; ties share the higher rank; a team without a value has none."""
+    have = [v for v in values.values() if v is not None]
+    better = (lambda x, v: x < v) if lower_better else (lambda x, v: x > v)
+    return {a: None if v is None else 1 + sum(1 for x in have if better(x, v)) for a, v in values.items()}
 
 
 def export_teams(season_dir: Path, y: int, out: Path) -> int:
@@ -224,20 +213,21 @@ def export_teams(season_dir: Path, y: int, out: Path) -> int:
                 num += g["overall"] * g["gp"]; den += g["gp"]
         out["Goaltending"] = num / den if den else None
         return out
-    abbrs = [t["teamAbbrev"]["default"] for t in table]
-    profiles = {a: profile(a) for a in abbrs}
-    score = {a: sum(v for v in p.values() if v is not None) / max(1, sum(v is not None for v in p.values()))
-             for a, p in profiles.items()}
-    pool = list(score.values())
-
-    # P%, PP%, PK% against the past ten seasons
-    past = _past_summaries(y)
-    fitted = {k: curves.fit([t[k] for t in past if t.get(k) is not None]) for k, _ in TEAM_STATS}
+    # every metric's value per team, then each team's rank on each, and the overall from the ranks
     now = {_key(t["teamFullName"]): t for t in _summary(y)}
+    values = {}
+    for t in table:
+        abbr, s = t["teamAbbrev"]["default"], now.get(_key(t["teamName"]["default"])) or {}
+        values[abbr] = {label: s.get(k) for k, label in TEAM_STATS} | profile(abbr)
+    metrics = list(next(iter(values.values())))
+    ranks = {m: _ranks({a: v[m] for a, v in values.items()}) for m in metrics}
+    mean_rank = {a: (sum(r) / len(r) if (r := [ranks[m][a] for m in metrics if ranks[m][a] is not None]) else None)
+                 for a in values}
+    overall = _ranks(mean_rank, lower_better=True)
 
     folder = out / "data" / "teams"
     folder.mkdir(parents=True, exist_ok=True)
-    note = (f"Overall: the average of GSAA/GP, SV% and GA/GP percentiles, curved against the {gdata.get('pool', 0)} goalies "
+    note = (f"Overall: the average of GSAx/GP, SV% and GA/GP percentiles, curved against the {gdata.get('pool', 0)} goalies "
             f"with {gdata.get('min_gp', 0)}+ games.") if gdata["goalies"] else ""
     index = []
     for t in sorted(table, key=lambda t: t["teamName"]["default"]):
@@ -280,16 +270,14 @@ def export_teams(season_dir: Path, y: int, out: Path) -> int:
         hurt = {c["id"] for c in injured}
         extras = [card(pid, n, pos) for n, pid, pos in roster if pid not in dressed and pid not in hurt]
 
-        stats_now = now.get(_key(name)) or {}
-        team_stats = [{"k": label, "value": f"{100 * stats_now[k]:.1f}%", "pct": round(float(fitted[k](stats_now[k])), 1)}
-                      if stats_now.get(k) is not None else {"k": label, "value": "", "pct": None} for k, label in TEAM_STATS]
-        overall = round(_mid_rank(pool, score[abbr]), 1) if pool else None
+        # the metrics in order, each with its rank; P%, PP% and PK% with the stat itself
+        shown = [{"k": m, "rank": ranks[m][abbr],
+                  "value": f"{100 * values[abbr][m]:.1f}%" if m in dict(TEAM_STATS).values() and values[abbr][m] is not None else ""}
+                 for m in metrics]
         page = {
             "abbrev": abbr, "name": name, "season": y, "seasonName": season_name([y]),
             "record": f'{t["wins"]}-{t["losses"]}-{t["otLosses"]}', "points": t["points"], "gp": t["gamesPlayed"],
-            "overall": overall, "rank": 1 + sum(1 for x in pool if x > score[abbr]), "teams": len(pool),
-            "teamStats": team_stats, "statsPool": len(past),
-            "profile": {k: (round(v, 1) if v is not None else None) for k, v in profiles[abbr].items()},
+            "rank": overall[abbr], "teams": len(values), "metrics": shown,
             "lineupSource": {"site": "Daily Faceoff", "updated": combos.get("updatedAt"), "via": combos.get("sourceName"),
                              "url": f"https://www.dailyfaceoff.com/teams/{slug(name)}/line-combinations"},
             "lines": lines, "pairs": pairs, "goalies": groups.get("g", []),
@@ -298,8 +286,8 @@ def export_teams(season_dir: Path, y: int, out: Path) -> int:
         }
         (folder / f"{abbr}.json").write_text(json.dumps(page), encoding="utf-8")
         _logo(abbr, out)
-        index.append({"abbrev": abbr, "name": name,
-                      "record": page["record"], "points": t["points"], "overall": overall, "rank": page["rank"]})
+        index.append({"abbrev": abbr, "name": name, "record": page["record"], "points": t["points"], "rank": page["rank"]})
+    index.sort(key=lambda t: (t["rank"] or len(index) + 1, t["name"]))   # best first
     (folder / "index.json").write_text(json.dumps({"season": y, "seasonName": season_name([y]), "teams": index}), encoding="utf-8")
     log.info("teams: %d team pages", len(index))
     return len(index)
