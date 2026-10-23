@@ -278,3 +278,16 @@ def test_team_lineup_matching():
     assert match("Brock Boeser", "sk2") == 3
     assert match("Thatcher Demko", "ir1") == 4
     assert match("Nobody Here", "C") is None
+
+
+def test_deadline_lineup_picking():
+    """Past seasons' lineups: the most-used combinations that share no player, and each stretch with nobody changing."""
+    from collections import Counter
+
+    from nhl_microstats import deadline
+    usage = Counter({(1, 2, 3): 500, (1, 4, 5): 400, (4, 5, 6): 300, (7, 8, 9): 100})
+    assert deadline._top(usage, 2) == [(1, 2, 3), (4, 5, 6)]       # (1, 4, 5) shares player 1 with the top line
+    shifts = pd.DataFrame({"player_id": [1, 2, 3], "team_abbrev": ["A", "A", "B"],
+                           "start_seconds": [0, 0, 10], "end_seconds": [30, 20, 30]})
+    got = [(secs, sorted(ids.tolist())) for secs, ids, _ in deadline._stretches(shifts)]
+    assert got == [(10, [1, 2]), (10, [1, 2, 3]), (10, [1, 3])]
