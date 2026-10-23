@@ -82,8 +82,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
       <p class="status" style="margin:0 0 6px"><a href="./" style="color:var(--accent);font-weight:600">← Home</a></p>
       <h1>NHL Microstats <span id="season-name"></span></h1>
       <p class="status" id="status">Loading…</p>
-      <p class="status"><a href="goalies.html" style="color:var(--accent);font-weight:600">Goalies →</a>
-        &nbsp;·&nbsp; <a href="nhle.html" style="color:var(--accent);font-weight:600">NHLe prospect cards →</a></p>
+      <p class="status"><a href="nhle.html" style="color:var(--accent);font-weight:600">NHLe prospect cards →</a></p>
     </div>
     <label for="season">Season <select id="season"></select></label>
   </header>
@@ -96,6 +95,7 @@ footer { margin-top: 20px; color: var(--muted); font-size: .86rem; max-width: 80
       <button type="button" data-pos="all" aria-pressed="true">All</button>
       <button type="button" data-pos="F" aria-pressed="false">Forwards</button>
       <button type="button" data-pos="D" aria-pressed="false">Defense</button>
+      <button type="button" data-goalies aria-pressed="false">Goalies</button>
     </div>
     <div class="seg" role="group" aria-label="Stat basis">
       <button type="button" data-mode="5v5" aria-pressed="true">5v5</button>
@@ -137,6 +137,10 @@ const pctCell = p => p == null || !isFinite(p) ? `<span class="dim">–</span>`
 const MIN_GP = 10;   // default sample-size filter; visitors can lower it
 const state = { season: null, pos: "all", mode: "5v5", q: "", team: "", mingp: MIN_GP, sort: "p", dir: -1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem("site-state") || "{}"), { q: "" }); } catch (e) {}
+// ?pos=F|D|all and ?season= (from the goalies table's buttons) win over the remembered view
+{ const u = new URLSearchParams(location.search);
+  if (["all", "F", "D"].includes(u.get("pos"))) state.pos = u.get("pos");
+  if (/^\d{4}$/.test(u.get("season") || "")) state.season = +u.get("season"); }
 let META, DATA, CATS = [];
 
 const cols = () => [
@@ -201,6 +205,7 @@ async function loadSeason(y) {
 document.addEventListener("click", e => {
   const b = e.target.closest("button"), th = e.target.closest("th");
   if (b?.dataset.pos) { state.pos = b.dataset.pos; render(); }
+  if (b && "goalies" in b.dataset) location.href = `goalies.html?season=${state.season}`;   // goalies have their own table
   if (b?.dataset.mode) { state.mode = b.dataset.mode; render(); }
   if (th) { const k = th.dataset.key;
     state.dir = state.sort === k ? -state.dir : (["name", "team", "pos"].includes(k) ? 1 : -1); state.sort = k; render(); }
