@@ -138,7 +138,7 @@ section { margin-top: 30px; }
     <div id="view-st" hidden><div class="zone" id="zone"></div></div>
     <!-- the goalies (and everything below) stay put whichever lineup view is on -->
     <h2 style="margin-top:18px">Goalies</h2>
-    <div class="lines" id="goalies"></div>
+    <div class="cards" id="goalies"></div>
   </section>
 
   <section>
@@ -195,7 +195,7 @@ $("lineup-note").innerHTML = TEAM.lineupSource.updated ? `From <a href="${esc(TE
   updated ${esc(upd)}${TEAM.lineupSource.via ? ` (via ${esc(TEAM.lineupSource.via)})` : ""}.` : "No lineup from Daily Faceoff yet.";
 $("forwards").innerHTML = TEAM.lines.map((l, i) => `<div class="line"><div class="lab">L${i + 1}</div>${l.map(p => card(p)).join("")}</div>`).join("");
 $("defence").innerHTML = TEAM.pairs.map((pr, i) => `<div class="line pair"><div class="lab">D${i + 1}</div>${pr.map(p => card(p)).join("")}</div>`).join("");
-$("goalies").innerHTML = `<div class="line pair"><div class="lab">G</div>${TEAM.goalies.map((g, j) => card(g, j ? "Backup" : "Starter")).join("")}</div>`;
+$("goalies").innerHTML = TEAM.goalies.map((g, j) => card(g, j ? "Backup" : "Starter")).join("");   // flush left, as the extras
 $("extras").innerHTML = TEAM.extras.map(p => card(p, p.pos === "G" ? "G" : SLOT[p.slot] ?? p.slot)).join("") || `<p class="note">None.</p>`;
 $("injured").innerHTML = TEAM.injured.map(p => card(p, "Injured")).join("") || `<p class="note">None.</p>`;
 // open on a view with #power-play or #penalty-kill (shareable)
