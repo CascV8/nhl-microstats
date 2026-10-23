@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goalie card · Pattullometrics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* A goalie's card: the counterpart of the skaters' player card. Same tokens as the rest of the site. */
+:root {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f2883a;   /* the Pattullo orange */
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+a { color: var(--accent); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+.nav { margin: 0 0 14px; font: 600 .86rem var(--body); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+label { display: inline-flex; gap: 6px; align-items: center; font: 600 .78rem var(--body); text-transform: uppercase;
+  letter-spacing: .03em; color: var(--muted); }
+select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.note { color: var(--muted); font-size: .84rem; margin: 14px 0 0; max-width: 72ch; }
+.pct { display: inline-grid; place-items: center; min-width: 2.9em; padding: 6px 8px; border-radius: 6px;
+  font: 700 1.35rem/1 var(--display); color: #fff; font-variant-numeric: tabular-nums; }
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
+.t-none { background: var(--track); color: var(--muted) }
+
+.gcard { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.band { display: grid; grid-template-columns: 84px 1fr auto; gap: 14px; align-items: center; padding: 16px; border-bottom: 1px solid var(--line); }
+.band img { width: 84px; height: 84px; object-fit: contain; object-position: bottom; }
+.band .nm { font: 700 2rem/1.02 var(--display); text-transform: uppercase; }
+.band .ps { font: 600 .8rem var(--display); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+.ovr { display: grid; justify-items: center; gap: 4px; }
+.ovr .pct { font-size: 2.6rem; min-width: 2.2em; padding: 10px 12px; }
+.k { font: 600 .74rem var(--display); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 16px; }
+.m { display: grid; gap: 6px; justify-items: center; }
+.m .pct { width: 100%; font-size: 1.6rem; padding: 10px 8px; }
+.m .p { font: 600 .74rem var(--display); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.line { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0 16px 16px; color: var(--muted); font-weight: 600; }
+.line b { color: var(--ink); }
+@media (max-width: 520px) {
+  .band { grid-template-columns: 64px 1fr; } .band img { width: 64px; height: 64px; }
+  .ovr { grid-column: 1 / -1; justify-items: start; grid-template-columns: auto auto; align-items: center; gap: 10px; }
+  .band .nm { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="nav"><a href="goalies.html" id="back">← All goalies</a><a href="./">Home</a>
+    <label for="season" id="season-label" hidden>Season <select id="season"></select></label></p>
+  <div id="card"><p class="note">Loading…</p></div>
+  <p class="note" id="foot"></p>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const shown = p => p == null ? "–" : Math.min(Math.max(Math.round(p), 1), 99);
+const ordinal = n => { const v = n % 100, s = v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th"; return n + s; };
+const fmt = { gsaa_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
+const params = new URLSearchParams(location.search), id = +params.get("id");
+
+async function show(y, seasons) {
+  $("back").href = `goalies.html?season=${y}`;
+  let data;
+  try { data = await (await fetch(`data/${y}/goalies.json`)).json(); } catch (e) { data = { goalies: [] }; }
+  const g = data.goalies.find(x => x.id === id);
+  if (!g) { $("card").innerHTML = `<p class="note">No card for that goalie in ${esc(data.name || y)}. <a href="goalies.html">All goalies</a></p>`; return; }
+  document.title = `${g.name} · Pattullometrics`;
+  const team = g.team.split(",").pop(), season = `${y}${y + 1}`;
+  $("card").innerHTML = `<article class="gcard">
+    <div class="band"><img src="https://assets.nhle.com/mugs/nhl/${season}/${esc(team)}/${g.id}.png" alt="" onerror="this.style.visibility='hidden'">
+      <div><div class="nm">${esc(g.name)}</div><div class="ps">${esc(g.team.replace(/,/g, " / "))} · ${esc(data.name)}${data.early ? " so far" : ""}</div></div>
+      <div class="ovr"><span class="pct ${tier(g.overall)}">${shown(g.overall)}</span><span class="k">Overall</span></div></div>
+    <div class="metrics">${g.metrics.map(m => `<div class="m"><span class="k">${esc(m.label)}</span>
+      <span class="pct ${tier(m.pct)}">${m.value == null ? "–" : fmt[m.key](m.value)}</span>
+      <span class="p">${m.pct == null ? "–" : ordinal(shown(m.pct)) + " percentile"}</span></div>`).join("")}</div>
+    <div class="line"><span><b>${g.gp}</b> GP</span><span><b>${g.w}-${g.l}-${g.otl}</b> W-L-OTL</span><span><b>${g.so}</b> SO</span>
+      ${g.qualified ? "" : `<span>under ${data.min_gp} GP: rated against the qualified goalies</span>`}</div>
+  </article>`;
+  $("foot").textContent = `Percentiles among the ${data.pool} goalies with ${data.min_gp}+ games in ${data.name}; league SV% `
+    + `${(data.league_sv ?? 0).toFixed(3).replace(/^0/, "")}. GSAA/GP: goals saved above an average goalie facing the same shots, `
+    + "per game. GA/GP: goals against per game (fewer is better). Overall averages the three percentiles and is curved against "
+    + "the same goalies, so 50 is a median goalie.";
+}
+
+fetch("data/meta.json").then(r => r.json()).then(async m => {
+  // the seasons this goalie has a card in, for the season picker
+  const all = m.seasons.filter(s => s.goalies), have = [];
+  for (const s of all) {
+    try { const d = await (await fetch(`data/${s.season}/goalies.json`)).json(); if (d.goalies.some(x => x.id === id)) have.push(s); } catch (e) {}
+  }
+  const want = +params.get("season");
+  const y = have.some(s => s.season === want) ? want : (have[0]?.season ?? want);
+  if (have.length > 1) {
+    $("season").innerHTML = have.map(s => `<option value="${s.season}">${esc(s.name)}</option>`).join("");
+    $("season").value = y; $("season-label").hidden = false;
+    $("season").addEventListener("change", e => { history.replaceState(null, "", `?season=${e.target.value}&id=${id}`); show(+e.target.value); });
+  }
+  show(y);
+}).catch(() => { $("card").innerHTML = `<p class="note">Couldn't load the stats. Try again in a minute.</p>`; });
+</script>
+</body>
+</html>

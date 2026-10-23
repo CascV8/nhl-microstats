@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goalies · Pattullometrics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Same tokens as the skater directory (site_index.html). */
+:root {
+  --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
+  --accent: #f2883a;   /* the Pattullo orange */
+  --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+a { color: var(--accent); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: end; justify-content: space-between; margin-bottom: 16px; }
+.nav { margin: 0 0 6px; font: 600 .86rem var(--body); display: flex; gap: 14px; }
+h1 { font: 700 2.4rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+h1 span { color: var(--accent); }
+.status { color: var(--muted); margin: 6px 0 0; font-size: .9rem; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 14px; }
+input, select { font: 600 .9rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; }
+input[type="search"] { width: min(260px, 100%); }
+input[type="number"] { width: 4.5em; }
+label { display: inline-flex; gap: 6px; align-items: center; font: 600 .78rem var(--body); text-transform: uppercase;
+  letter-spacing: .03em; color: var(--muted); }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; width: fit-content; max-width: 100%; }
+table { border-collapse: collapse; width: auto; font-size: .9rem; font-variant-numeric: tabular-nums; }
+th { font: 600 .74rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right;
+  padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer; position: sticky; top: 0; background: var(--surface); }
+th[aria-sort] { color: var(--ink); }
+th[aria-sort="descending"]::after { content: " ▾"; } th[aria-sort="ascending"]::after { content: " ▴"; }
+th.l, td.l { text-align: left; }
+td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--track); }
+td a { color: var(--ink); font-weight: 600; text-decoration: none; } td a:hover { text-decoration: underline; }
+.dim { color: var(--muted); }
+.pct { display: inline-block; min-width: 3.4em; padding: 3px 7px; border-radius: 4px; font: 700 .95rem var(--display);
+  text-align: center; color: #fff; }
+.t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg); color: var(--ink) }
+.t-weak { background: var(--weak) } .t-none { background: var(--track); color: var(--muted) }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--muted); margin: 12px 0 0; max-width: 90ch; }
+.legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="nav"><a href="./">← Home</a><a href="microstats.html">Skaters</a></p>
+      <h1>NHL Goalies <span id="season-name"></span></h1>
+      <p class="status" id="status">Loading…</p>
+    </div>
+    <label for="season">Season <select id="season"></select></label>
+  </header>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search goalies or teams" aria-label="Search goalies or teams">
+    <label for="team">Team <select id="team"><option value="">All</option></select></label>
+    <label for="mingp">Min GP <input type="number" id="mingp" min="0"></label>
+  </div>
+  <div class="table"><table>
+    <thead><tr id="head"></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+  <div class="legend">
+    <span><i class="t-elite"></i>90th+</span><span><i class="t-good"></i>67–89th</span>
+    <span><i class="t-avg"></i>33–66th</span><span><i class="t-weak"></i>below 33rd</span>
+    <span id="foot"></span>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
+const shown = p => p == null ? "–" : Math.min(Math.max(Math.round(p), 1), 99);
+const fmt = { gsaa_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
+const metric = (g, k) => g.metrics.find(m => m.key === k);
+const state = { season: null, q: "", team: "", mingp: null, sort: "overall", dir: -1 };
+let META, DATA;
+
+const cols = [
+  { key: "name", label: "Goalie", cls: "l", get: g => g.name,
+    cell: g => `<a href="goalie.html?season=${state.season}&id=${g.id}">${esc(g.name)}</a>` },
+  { key: "team", label: "Team", cls: "l", get: g => g.team, cell: g => esc(g.team) },
+  { key: "gp", label: "GP", get: g => g.gp, cell: g => g.gp },
+  { key: "rec", label: "W-L-OTL", get: g => g.w, cell: g => `${g.w}-${g.l}-${g.otl}` },
+  { key: "overall", label: "Overall", get: g => g.overall ?? -1, cell: g => `<span class="pct ${tier(g.overall)}">${shown(g.overall)}</span>` },
+  ...["gsaa_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsaa_gp: "GSAA/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
+    get: g => metric(g, k).pct ?? -1,
+    cell: g => { const m = metric(g, k); return m.value == null ? `<span class="dim">–</span>`
+      : `<span class="pct ${tier(m.pct)}" title="${shown(m.pct)} percentile">${fmt[k](m.value)}</span>`; } })),
+];
+
+function render() {
+  const col = cols.find(c => c.key === state.sort) || cols[4];
+  $("head").innerHTML = cols.map(c => `<th class="${c.cls || ""}" data-key="${c.key}" scope="col"
+    ${c.key === col.key ? `aria-sort="${state.dir < 0 ? "descending" : "ascending"}"` : ""}>${c.label}</th>`).join("");
+  const q = state.q.trim().toLowerCase();
+  const rows = DATA.goalies.filter(g => g.gp >= state.mingp && (!state.team || g.team.split(",").includes(state.team))
+      && (!q || g.name.toLowerCase().includes(q) || g.team.toLowerCase().includes(q)))
+    .sort((a, b) => { const x = col.get(a), y = col.get(b);
+      return (typeof x === "string" ? x.localeCompare(y) : x - y || b.gp - a.gp) * state.dir; });
+  $("rows").innerHTML = rows.map(g => `<tr>${cols.map(c => `<td class="${c.cls || ""}">${c.cell(g)}</td>`).join("")}</tr>`).join("")
+    || `<tr><td class="l" colspan="${cols.length}">No goalies match. Try a lower <b>Min GP</b>.</td></tr>`;
+}
+
+async function loadSeason(y) {
+  state.season = y;
+  try { DATA = await (await fetch(`data/${y}/goalies.json`)).json(); }
+  catch (e) { DATA = { goalies: [], name: "", early: false }; }
+  $("season-name").textContent = DATA.early ? `${DATA.name} so far` : DATA.name;
+  $("status").textContent = DATA.goalies.length ? `${DATA.goalies.length} goalies · league SV% ${(DATA.league_sv ?? 0).toFixed(3).replace(/^0/, "")}`
+    : "No goalie stats for this season yet.";
+  if (state.mingp == null || state.mingpAuto) { state.mingp = DATA.min_gp ?? 0; state.mingpAuto = true; }
+  $("mingp").value = state.mingp;
+  const teams = [...new Set(DATA.goalies.flatMap(g => g.team.split(",")).filter(Boolean))].sort();
+  $("team").innerHTML = `<option value="">All</option>` + teams.map(t => `<option>${esc(t)}</option>`).join("");
+  if (!teams.includes(state.team)) state.team = "";
+  $("team").value = state.team;
+  $("foot").textContent = `Each value is coloured by its percentile among the ${DATA.pool ?? 0} goalies with ${DATA.min_gp ?? 0}+ games this season. `
+    + "GSAA/GP: goals saved above an average goalie facing the same shots, per game. Overall averages the three percentiles, curved "
+    + "against the same goalies, so 50 is a median goalie.";
+  render();
+}
+
+document.addEventListener("click", e => {
+  const th = e.target.closest("th"); if (!th) return;
+  const k = th.dataset.key;
+  state.dir = state.sort === k ? -state.dir : (["name", "team"].includes(k) ? 1 : -1); state.sort = k; render();
+});
+$("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("team").addEventListener("change", e => { state.team = e.target.value; render(); });
+$("mingp").addEventListener("input", e => { state.mingp = +e.target.value || 0; state.mingpAuto = false; render(); });
+$("season").addEventListener("change", e => loadSeason(+e.target.value));
+
+fetch("data/meta.json").then(r => r.json()).then(m => {
+  META = m;
+  const seasons = m.seasons.filter(s => s.goalies);
+  $("season").innerHTML = seasons.map(s => `<option value="${s.season}">${esc(s.name)}</option>`).join("");
+  const want = +new URLSearchParams(location.search).get("season");
+  const y = seasons.some(s => s.season === want) ? want : seasons[0]?.season;
+  if (y == null) { $("status").textContent = "No goalie stats yet."; return; }
+  $("season").value = y;
+  loadSeason(y);
+}).catch(() => { $("status").textContent = "Couldn't load the stats. Try again in a minute."; });
+</script>
+</body>
+</html>
