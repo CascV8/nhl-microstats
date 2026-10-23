@@ -240,7 +240,7 @@ def test_quality_of_competition_skips_unrated_opponents():
 
 
 def test_goalie_ratings():
-    """Goalie cards: GSAA/GP, SV% and GA/GP percentiles within the pool, and an overall curved against it."""
+    """Goalie cards: GSAx/GP, SV% and GA/GP percentiles within the pool, and an overall curved against it."""
     from nhl_microstats import goalies
     rows = [  # player_id, name, team, gp, sa, ga
         (1, "Good", "VAN", 30, 900, 70), (2, "Avg", "EDM", 30, 900, 90), (3, "Bad", "CGY", 30, 900, 110),
@@ -249,14 +249,19 @@ def test_goalie_ratings():
     df = pd.DataFrame([{"player_id": i, "goalie_full_name": n, "team_abbrevs": t, "games_played": gp, "shots_against": sa,
                         "goals_against": ga, "saves": sa - ga, "wins": 0, "losses": 0, "ot_losses": 0, "shutouts": 0}
                        for i, n, t, gp, sa, ga in rows])
-    out = {g["name"]: g for g in goalies.goalie_ratings(df, complete=True)}
+    # xG faced on unblocked shots, and the goals on them (build.goalie_xg); the rookie has none
+    xg = pd.DataFrame({"player_id": [1, 2, 3], "shots": [1200] * 3, "xga": [85.0, 88.0, 92.0], "goals": [68, 89, 108]})
+    out = {g["name"]: g for g in goalies.goalie_ratings(df, complete=True, xg=xg)}
     assert out["Good"]["overall"] > out["Avg"]["overall"] > out["Bad"]["overall"]
     assert not out["Rookie"]["qualified"] and out["Good"]["qualified"]
     sv = {m["key"]: m for m in out["Good"]["metrics"]}
     assert sv["sv"]["value"] == pytest.approx(830 / 900, abs=1e-4)
     assert sv["ga_gp"]["pct"] > 50   # fewest goals against: a high percentile
-    lg_sv = 1 - (70 + 90 + 110 + 10) / (900 * 3 + 150)
-    assert sv["gsaa_gp"]["value"] == pytest.approx((900 * (1 - lg_sv) - 70) / 30, abs=1e-4)
+    assert sv["gsax_gp"]["value"] == pytest.approx((85 - 68) / 30, abs=1e-4)
+    rookie = {m["key"]: m for m in out["Rookie"]["metrics"]}
+    assert rookie["gsax_gp"]["value"] is None and out["Rookie"]["overall"] is not None   # rated on the other two
+    no_xg = {g["name"]: g for g in goalies.goalie_ratings(df, complete=True)}
+    assert all(m["pct"] is None for m in no_xg["Good"]["metrics"] if m["key"] == "gsax_gp")
     assert goalies.season_meta(df, complete=True)["pool"] == 3
 
 
