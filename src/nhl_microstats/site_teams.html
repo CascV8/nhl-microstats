@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap">
-<!-- All 32 teams, alphabetical, each a button to its page (team.html?team=ABBR). Data: data/teams/index.json (teams.py). -->
+<!-- All 32 teams, best to worst overall, each a button to its page (team.html?team=ABBR). Data: data/teams/index.json (teams.py). -->
 <style>
 :root {
   --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
@@ -34,8 +34,8 @@ h1 { font: 700 2.6rem/1 var(--display); text-transform: uppercase; letter-spacin
 .team img { width: 64px; height: 44px; object-fit: contain; }
 .team .nm { font: 700 1.15rem/1.05 var(--display); text-transform: uppercase; letter-spacing: .01em; }
 .team .rec { color: var(--muted); font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-.pct { display: inline-grid; place-items: center; min-width: 3em; padding: 7px 8px; border-radius: 7px;
-  font: 700 1.2rem/1 var(--display); color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pct { display: inline-grid; place-items: center; width: 54px; aspect-ratio: 1; border-radius: 8px;   /* square */
+  font: 700 1.3rem/1 var(--display); color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .t-elite { background: var(--elite) } .t-good { background: var(--good) } .t-avg { background: var(--avg) } .t-weak { background: var(--weak) }
 .t-none { background: var(--track); color: var(--muted) }
 .status { color: var(--muted); }
@@ -54,18 +54,21 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
 const ordinal = n => { const v = n % 100, s = v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th"; return n + s; };
-const shown = p => p == null ? "–" : ordinal(Math.min(Math.max(Math.round(p), 1), 99));
+// a rank of the league's teams (1st best), coloured as the percentile it stands for: 1st is 100, last is 0
+const rankTier = (r, n) => r == null ? "t-none" : tier(100 * (n - r) / Math.max(n - 1, 1));
 
 (async () => {
   let d;
   try { d = await (await fetch("data/teams/index.json")).json(); }
   catch { $("status").textContent = "No team pages yet."; return; }
   $("status").hidden = true;
-  $("sub").textContent = `${d.seasonName} · the box is each team's overall rating, its metrics curved against the league`;
-  $("grid").innerHTML = d.teams.map(t => `<a class="team" href="team.html?team=${t.abbrev}">
+  const n = d.teams.length;
+  $("sub").textContent = `${d.seasonName} · best to worst: each team's overall rank of ${n}, from the average of its metric ranks`;
+  const teams = [...d.teams].sort((a, b) => (a.rank ?? n + 1) - (b.rank ?? n + 1) || a.name.localeCompare(b.name));
+  $("grid").innerHTML = teams.map(t => `<a class="team" href="team.html?team=${t.abbrev}">
     <img src="logos/${t.abbrev}.svg" alt="" onerror="this.style.visibility='hidden'">
     <span><div class="nm">${esc(t.name)}</div><div class="rec">${esc(t.record)} · ${t.points} pts</div></span>
-    <span class="pct ${tier(t.overall)}" title="Team overall: ${t.rank ? ordinal(t.rank) : "–"} of ${d.teams.length}">${shown(t.overall)}</span></a>`).join("");
+    <span class="pct ${rankTier(t.rank, n)}" title="Team overall: ${t.rank ? ordinal(t.rank) : "–"} of ${n}">${t.rank ? ordinal(t.rank) : "–"}</span></a>`).join("");
 })();
 </script>
 </body>

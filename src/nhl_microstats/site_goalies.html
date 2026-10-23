@@ -108,7 +108,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good" : p >= 33 ? "t-avg" : "t-weak";
 const shown = p => p == null ? "–" : Math.min(Math.max(Math.round(p), 1), 99);
-const fmt = { gsaa_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
+const fmt = { gsax_gp: v => (v >= 0 ? "+" : "") + v.toFixed(2), sv: v => v.toFixed(3).replace(/^0/, ""), ga_gp: v => v.toFixed(2) };
 const metric = (g, k) => g.metrics.find(m => m.key === k);
 const state = { season: null, q: "", team: "", mingp: null, sort: "overall", dir: -1 };
 let META, DATA;
@@ -120,7 +120,7 @@ const cols = [
   { key: "gp", label: "GP", get: g => g.gp, cell: g => g.gp },
   { key: "rec", label: "W-L-OTL", get: g => g.w, cell: g => `${g.w}-${g.l}-${g.otl}` },
   { key: "overall", label: "Ovr", full: "Overall", cls: "c", get: g => g.overall ?? -1, cell: g => `<span class="pct ${tier(g.overall)}">${shown(g.overall)}</span>` },
-  ...["gsaa_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsaa_gp: "GSAA/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
+  ...["gsax_gp", "sv", "ga_gp"].map(k => ({ key: k, label: { gsax_gp: "GSAx/GP", sv: "SV%", ga_gp: "GA/GP" }[k],
     cls: "c", get: g => metric(g, k).pct ?? -1,
     cell: g => { const m = metric(g, k); return m.value == null ? `<span class="dim">–</span>`
       : `<span class="pct ${tier(m.pct)}" title="${shown(m.pct)} percentile">${fmt[k](m.value)}</span>`; } })),
@@ -156,7 +156,7 @@ async function loadSeason(y) {
   if (!teams.includes(state.team)) state.team = "";
   $("team").value = state.team;
   $("foot").textContent = `Each value is coloured by its percentile among the ${DATA.pool ?? 0} goalies with ${DATA.min_gp ?? 0}+ games this season. `
-    + "GSAA/GP: goals saved above an average goalie facing the same shots, per game. Overall averages the three percentiles, curved "
+    + "GSAx/GP: goals saved above expected (the xG of the unblocked shots faced, minus the goals on them), per game. Overall averages the three percentiles, curved "
     + "against the same goalies, so 50 is a median goalie.";
   render();
 }

@@ -158,6 +158,9 @@ const tier = p => p == null ? "t-none" : p >= 90 ? "t-elite" : p >= 67 ? "t-good
 const ordinal = n => { const v = n % 100, s = v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th"; return n + s; };
 const shown = p => p == null ? "–" : ordinal(Math.min(Math.max(Math.round(p), 1), 99));
 const box = (p, extra = "") => `<span class="pct ${tier(p)} ${extra}">${shown(p)}</span>`;
+// A team's rank of the league's teams (1st best), coloured as the percentile it stands for: 1st of 32 is 100, 32nd is 0.
+const rankBox = r => r == null ? `<span class="pct t-none">–</span>`
+  : `<span class="pct ${tier(100 * (TEAM.teams - r) / Math.max(TEAM.teams - 1, 1))}" title="${ordinal(r)} of ${TEAM.teams}">${ordinal(r)}</span>`;
 let TEAM;
 const shot = p => p.id ? `https://assets.nhle.com/mugs/nhl/${TEAM.season}${TEAM.season + 1}/${TEAM.abbrev}/${p.id}.png` : "";
 const SLOT = { LW: "LW", C: "C", RW: "RW", LD: "LD", RD: "RD", G1: "Starter", G2: "Backup", L: "LW", R: "RW" };
@@ -176,15 +179,14 @@ function card(p, slot) {
 function render() {
 document.title = `${TEAM.name} · Pattullometrics`;
 $("head").innerHTML = `<span class="logo" id="logo"></span>
-  <div class="titles"><h1>${esc(TEAM.name)}</h1><div class="sub">${TEAM.seasonName} · ${TEAM.record} · ${TEAM.points} pts · percentiles at 5v5</div></div>
-  <div class="team-ovr" title="Team metrics overall: categories and goaltending averaged, curved against all ${TEAM.teams} teams">
-    <div class="txt"><span class="k">Team overall</span><span class="r">${ordinal(TEAM.rank)} of ${TEAM.teams}</span></div>${box(TEAM.overall)}</div>`;
+  <div class="titles"><h1>${esc(TEAM.name)}</h1><div class="sub">${TEAM.seasonName} · ${TEAM.record} · ${TEAM.points} pts · players' percentiles at 5v5</div></div>
+  <div class="team-ovr" title="Team overall: the average of its metric ranks, ranked against all ${TEAM.teams} teams">
+    <div class="txt"><span class="k">Team overall</span><span class="r">of ${TEAM.teams} teams</span></div>${rankBox(TEAM.rank)}</div>`;
 
 loadLogo(); document.fonts.ready.then(fitLogo); addEventListener("resize", fitLogo);
 
-// Team metrics, in order: a coloured percentile box each; P%, PP% and PK% with the stat itself under it.
-const METRICS = [...TEAM.teamStats, ...Object.entries(TEAM.profile).map(([k, v]) => ({ k, pct: v }))];
-$("metrics").innerHTML = METRICS.map(m => `<div class="metric"><span class="k">${esc(m.k)}</span>${box(m.pct)}
+// Team metrics, in order: each team's rank among the league's (1st best); P%, PP% and PK% with the stat itself under it.
+$("metrics").innerHTML = TEAM.metrics.map(m => `<div class="metric"><span class="k">${esc(m.k)}</span>${rankBox(m.rank)}
   ${m.value ? `<span class="v">${esc(m.value)}</span>` : ""}</div>`).join("");
 
 // ── Lineup: 5v5 ────────────────────────────────────────────────────────────────────────────────────────

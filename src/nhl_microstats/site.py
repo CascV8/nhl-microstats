@@ -106,7 +106,7 @@ def _export_goalies(y: int, complete: bool, folder: Path) -> int:
     except Exception as e:   # goalie cards are an extra: a site without them beats no site
         log.warning("%s: no goalie stats (%s)", y, e)
         return 0
-    rows = goalies.goalie_ratings(df, complete)
+    rows = goalies.goalie_ratings(df, complete, goalies.load_xg(y))
     (folder / "goalies.json").write_text(json.dumps({"season": y, "name": season_name([y]), "early": not complete,
                                                      **goalies.season_meta(df, complete), "goalies": rows}), encoding="utf-8")
     return len(rows)
