@@ -50,6 +50,9 @@ def main() -> None:
                      help="start years; the NHL has goal tracking from 2023-24 on")
     gtp.add_argument("--workers", type=int, default=6)
 
+    ln = sub.add_parser("lineups", help="refresh Daily Faceoff lineups and NHL rosters for the team pages")
+    ln.add_argument("--force", action="store_true", help="refetch even if fetched in the last few hours")
+
     st = sub.add_parser("site", help="export the static website to site/ (index + a card per player)")
     st.add_argument("seasons", nargs="*", help="start years (default: the season in progress and the last complete one)")
     st.add_argument("--out", default=None)
@@ -108,6 +111,19 @@ def main() -> None:
         for s in args.seasons:
             collect_goal_tracking(s, workers=args.workers)
             build_goal_tracking(s)
+    elif args.cmd == "lineups":
+        # Tell the workflow when a lineup or roster changed since the last deploy (data/lineups_deployed), so the site
+        # is rebuilt and deployed even on a day with no new games.
+        from .collect import DATA
+        from .teams import refresh_lineups
+        fingerprint, fetched = refresh_lineups(force=args.force)
+        deployed = DATA / "lineups_deployed"
+        changed = not deployed.exists() or deployed.read_text().strip() != fingerprint
+        print(f"{fetched} teams fetched; lineups {'changed' if changed else 'unchanged'} ({fingerprint[:12]})")
+        if os.environ.get("GITHUB_OUTPUT"):   # refreshed: save the cache, so the next run doesn't refetch them
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write(f"fingerprint={fingerprint}\n" + ("changed=true\n" if changed else "")
+                        + ("refreshed=true\n" if fetched else ""))
     elif args.cmd == "site":
         from .site import OUT, export_site
         export_site(args.seasons or None, args.out or OUT)
