@@ -258,3 +258,18 @@ def test_goalie_ratings():
     lg_sv = 1 - (70 + 90 + 110 + 10) / (900 * 3 + 150)
     assert sv["gsaa_gp"]["value"] == pytest.approx((900 * (1 - lg_sv) - 70) / 30, abs=1e-4)
     assert goalies.season_meta(df, complete=True)["pool"] == 3
+
+
+def test_team_lineup_matching():
+    """Team pages: Daily Faceoff's slugs from the NHL's names, and its names matched to NHL ids by position."""
+    from nhl_microstats import teams
+    assert teams.slug("Montréal Canadiens") == "montreal-canadiens"
+    assert teams.slug("St. Louis Blues") == "st-louis-blues"
+    roster = [["Elias Pettersson", 1, "C"], ["Elias Pettersson", 2, "D"], ["Brock Boeser", 3, "R"], ["Thatcher Demko", 4, "G"]]
+    match = teams._matcher(roster)
+    assert match("Elias Pettersson", "C") == 1
+    assert match("Elias Nils Pettersson", "LD") == 2       # Daily Faceoff's name for the defenceman: last name, in the D
+    assert match("Elias Pettersson", "sk1") is None        # special teams: no position, two of them
+    assert match("Brock Boeser", "sk2") == 3
+    assert match("Thatcher Demko", "ir1") == 4
+    assert match("Nobody Here", "C") is None
