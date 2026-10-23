@@ -11,7 +11,7 @@
 /* Same tokens as the microstats index and the NHLe cards. The home page is a choice between the two. */
 :root {
   --bg: #0b1117; --surface: #131c24; --ink: #e5ecf1; --muted: #8d9ba7; --line: #24323e; --track: #1e2a35;
-  --accent: #f0566c; --star: #f2bb18; --nhler: #1fb83a; --bust: #34424f;
+  --accent: #f2883a;   /* the Pattullo orange */ --star: #f2bb18; --nhler: #1fb83a; --bust: #34424f;
   --elite: #6f9cff; --good: #3f6fc9; --avg: #5a6875; --weak: #f07a52;
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
@@ -55,7 +55,7 @@ h1 .accent { color: var(--bridge-blue); }   /* PATTULLO in the arch's orange, ME
 /* The bridge has no piers: its steel rests on the title's T's (the second T of PATTULLO and the T of METRICS)
    as if they were the piers. The script lines it up with those letters; until it has (or without it) the
    bridge simply sits above the title. */
-.brand { position: relative; margin-bottom: 36px; }
+.brand { position: relative; width: fit-content; max-width: 100%; margin: 0 auto 36px; }   /* centred on the page */
 .brand.aligned .bridge { position: absolute; margin: 0; max-width: none; }
 </style>
 </head>
