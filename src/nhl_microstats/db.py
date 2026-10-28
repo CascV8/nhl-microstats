@@ -75,6 +75,8 @@ STATS = {
     "xga_on_off_pct":     ("xG against on/off ice %", "on-ice", "xg-model+shifts", False, False),
     # quality of competition: opponents' 5v5 xGF%, weighted by shared 5v5 ice time (already a %)
     "qoc_xgf_pct":        ("Quality of competition (opponents' xGF%)", "competition", "xg-model+shifts", False, True),
+    # ice time per game played, minutes (5v5 or all situations, by mode): how much his coach uses him
+    "toi_per_gp":         ("Ice time per game (min)", "competition", "shifts", False, True),
     # NHL Edge (all situations, season values, not counts)
     "max_skating_speed":  ("Max skating speed (mph)", "edge", "nhl-edge", False, True),
     "bursts_over_20mph":  ("Speed bursts 20+ mph", "edge", "nhl-edge", True, True),
@@ -138,6 +140,7 @@ def init() -> None:
                         [(k, label, per60, better) for k, (label, per60, better) in GT.items()])
         # Stats dropped from STATS (e.g. top_shot_speed) shouldn't linger in pools.
         con.execute("DELETE FROM stats WHERE stat NOT IN (SELECT stat FROM stat_defs)")
+        add_toi_per_gp(con)
 
 
 def write_season(season: int, player_seasons: pd.DataFrame, stats: pd.DataFrame, edge: pd.DataFrame) -> None:
@@ -152,6 +155,17 @@ def write_season(season: int, player_seasons: pd.DataFrame, stats: pd.DataFrame,
         con.execute(f"DELETE FROM stats WHERE season = ? AND stat IN ({','.join('?' * len(computed))})", (season, *computed))
         con.executemany("INSERT INTO player_seasons VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", ps_.itertuples(index=False))
         con.executemany("INSERT INTO stats VALUES (?, ?, ?, ?, ?)", rows.itertuples(index=False))
+        add_toi_per_gp(con)
+
+
+def add_toi_per_gp(con: sqlite3.Connection) -> None:
+    """Ice time per game, in minutes, for every season in player_seasons (5v5 and all
+    situations). Derived from the TOI and GP already stored, so it also fills in seasons
+    built before the stat existed, without rebuilding them."""
+    for strength in ("all", "5v5"):
+        con.execute(f"""INSERT OR REPLACE INTO stats
+                        SELECT player_id, season, '{strength}', 'toi_per_gp', toi_{strength} / gp / 60.0
+                        FROM player_seasons WHERE gp > 0""")
 
 
 def import_tracked(csv_path: str, strength: str = "5v5") -> None:

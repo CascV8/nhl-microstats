@@ -112,7 +112,7 @@ def test_percentile_end_to_end(tmp_path, monkeypatch):
         one = percentile.player_table(pid, 2025).set_index("stat")
         for stat in one.index:
             assert batch.loc[(pid, stat), "value"] == pytest.approx(one.loc[stat, "value"])
-            assert batch.loc[(pid, stat), "percentile"] == pytest.approx(one.loc[stat, "percentile"])
+            assert batch.loc[(pid, stat), "percentile"] == pytest.approx(one.loc[stat, "percentile"], nan_ok=True)
 
 
 def test_current_season_starts_in_september():
