@@ -27,7 +27,7 @@ STATS = {
     "shot_attempts":      ("Shot attempts (individual)", "shooting", "pbp", True, True),
     "fenwick":            ("Unblocked shot attempts (Fenwick)", "shooting", "pbp", True, True),
     "shots_on_goal":      ("Shots on goal", "shooting", "pbp", True, True),
-    "rush_shots":         ("Rush shots (individual)", "shooting", "pbp", True, True),
+    "rush_shots":         ("Rush shots", "shooting", "pbp", True, True),
     "cycle_shots":        ("Cycle shots", "shooting", "pbp", True, True),
     "shooting_pct":       ("Shooting %", "shooting", "pbp", False, True),
     "primary_assists":    ("Primary assists", "passing", "pbp", True, True),
