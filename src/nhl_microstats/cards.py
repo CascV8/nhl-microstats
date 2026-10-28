@@ -28,14 +28,14 @@ SECTIONS = {
     "Defence": ["takeaways", "blocks", "ga_on_off_pct", "xga_on_off_pct", "gt_beaten"],
     "Penalties": ["penalties_taken", "penalties_drawn"],
     "Speed": ["bursts_over_20mph", "max_skating_speed"],
-    "Competition": ["qoc_xgf_pct"],
+    "Competition": ["qoc_xgf_pct", "toi_per_gp"],
     "Physicality": ["hits", "hits_taken", "fights"],
 }
 # gt_* stats come from the NHL's goal tracking (2023-24 on) and are missing before then.
 # The overall rating is a weighted average of the category percentiles, ranked with its own
 # curve, with weights by position: forwards lean on offence, finishing and play driving;
 # defensemen on play driving, defence and offence. Speed and physicality count least.
-# Competition (who he played against) counts only for defensemen, at half weight.
+# Competition (who he played against, and his ice time per game) counts only for defensemen, at half weight.
 OVERALL = "Overall"
 OVERALL_WEIGHTS = {
     "F": {"Offence": 3, "Finishing": 3, "Play driving": 3, "Defence": 2, "Penalties": 1,

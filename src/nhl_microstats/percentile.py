@@ -115,9 +115,20 @@ def rank(values: np.ndarray, value: float) -> float:
     return 100 * (below + 0.5 * (at_or_below - below)) / len(values)
 
 
+class _NoSpread:
+    """A pool where everyone has the same value ranks nobody: every percentile is NaN."""
+    mae = float("nan")
+
+    def __call__(self, v):
+        out = np.full(np.shape(np.asarray(v, dtype=float)), np.nan)
+        return out if out.ndim else float("nan")
+
+
 def curve_for(values: np.ndarray, info: dict) -> curves.Curve:
     """The stored curve for this pool, or one fitted on the spot for
     non-default pools (totals, a custom TOI cutoff, or a stat added since)."""
+    if len(values) < 2 or np.ptp(values) == 0:
+        return _NoSpread()
     default = info["min_toi"] == MIN_TOI[info["strength"]] and (info["per60"] or not _defs().loc[info["stat"], "per60"])
     if default:
         season = curves.key(info["seasons"])
