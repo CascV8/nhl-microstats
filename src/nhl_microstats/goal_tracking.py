@@ -56,7 +56,7 @@ DEKE_SWING, DEKE_FRAMES, DEKE_MIN_POSSESSION = 30, 5, 5
 
 STATS = {
     # stat -> (label, per60, higher is better)
-    "gt_possession_time":  ("Puck possession on goals (s)", True, True),
+    "gt_possession_time":  ("Puck possession on goals", True, True),
     "gt_carries":          ("Zone carries on goals", True, True),
     "gt_defenders_beaten": ("Defenders beaten on goals", True, True),
     "gt_dekes":            ("Dekes on goals", True, True),

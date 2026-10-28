@@ -23,12 +23,12 @@ DB_PATH = DATA / "microstats.db"
 STATS = {
     # individual
     "goals":              ("Goals", "shooting", "pbp", True, True),
-    "ixg":                ("xG (individual)", "shooting", "xg-model", True, True),
+    "ixg":                ("xG", "shooting", "xg-model", True, True),
     "shot_attempts":      ("Shot attempts (individual)", "shooting", "pbp", True, True),
     "fenwick":            ("Unblocked shot attempts (Fenwick)", "shooting", "pbp", True, True),
     "shots_on_goal":      ("Shots on goal", "shooting", "pbp", True, True),
     "rush_shots":         ("Rush shots (individual)", "shooting", "pbp", True, True),
-    "cycle_shots":        ("Cycle shots (individual)", "shooting", "pbp", True, True),
+    "cycle_shots":        ("Cycle shots", "shooting", "pbp", True, True),
     "shooting_pct":       ("Shooting %", "shooting", "pbp", False, True),
     "primary_assists":    ("Primary assists", "passing", "pbp", True, True),
     "secondary_assists":  ("Secondary assists", "passing", "pbp", True, True),
@@ -56,7 +56,7 @@ STATS = {
     "fenwick_for":        ("On-ice unblocked attempts for", "on-ice", "pbp+shifts", True, True),
     "fenwick_against":    ("On-ice unblocked attempts against", "on-ice", "pbp+shifts", True, False),
     # on-ice shares (already a %)
-    "fenwick_pct":        ("Fenwick % (on-ice)", "on-ice", "pbp+shifts", False, True),
+    "fenwick_pct":        ("On-ice Fenwick %", "on-ice", "pbp+shifts", False, True),
     "xgf_pct":            ("xGF% (on-ice)", "on-ice", "xg-model+shifts", False, True),
     "xgf":                ("On-ice xG for", "on-ice", "xg-model+shifts", True, True),
     "xga":                ("On-ice xG against", "on-ice", "xg-model+shifts", True, False),
@@ -74,11 +74,11 @@ STATS = {
     # on-ice xG against per 60 as a % of the team's with him off the ice, same games (5v5 only)
     "xga_on_off_pct":     ("xG against on/off ice %", "on-ice", "xg-model+shifts", False, False),
     # quality of competition: opponents' 5v5 xGF%, weighted by shared 5v5 ice time (already a %)
-    "qoc_xgf_pct":        ("Quality of competition (opponents' xGF%)", "competition", "xg-model+shifts", False, True),
+    "qoc_xgf_pct":        ("Average xGF% of opponents", "competition", "xg-model+shifts", False, True),
     # NHL Edge (all situations, season values, not counts)
-    "max_skating_speed":  ("Max skating speed (mph)", "edge", "nhl-edge", False, True),
+    "max_skating_speed":  ("Max skating speed", "edge", "nhl-edge", False, True),
     "bursts_over_20mph":  ("Speed bursts 20+ mph", "edge", "nhl-edge", True, True),
-    "shot_strength":      ("Shot strength (mph)", "edge", "nhl-edge", False, True),
+    "shot_strength":      ("Shot strength", "edge", "nhl-edge", False, True),
     "distance_skated":    ("Distance skated (mi)", "edge", "nhl-edge", True, True),
     "max_game_distance":  ("Most distance in a game (mi)", "edge", "nhl-edge", False, True),
     "oz_time_pct":        ("Offensive-zone time %", "edge", "nhl-edge", False, True),
