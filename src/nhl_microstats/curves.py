@@ -169,6 +169,20 @@ def load(con: sqlite3.Connection, stat: str, strength: str, season: int, pos: st
     return Curve(*row) if row else None
 
 
+def fit_missing() -> None:
+    """Fit curves for stats that have none yet (a stat added since the last full build),
+    so the scheduled update ranks a new stat without refitting every curve."""
+    from .db import connect
+
+    with connect() as con:
+        con.executescript(SCHEMA)
+        missing = [r[0] for r in con.execute(
+            "SELECT DISTINCT stat FROM stats WHERE stat NOT IN (SELECT DISTINCT stat FROM curves)")]
+    if missing:
+        log.info("fitting curves for new stats: %s", missing)
+        fit_all(missing)
+
+
 def fit_all(stats: list[str] | None = None) -> pd.DataFrame:
     """Fit and store a curve for every pool at the default TOI cutoffs, as rates per
     60: each season on its own, the last three complete seasons pooled (the
