@@ -1,13 +1,8 @@
-"""Player cards: a self-contained HTML page of microstat percentiles.
-
-    nhl-microstats cards                      # top 12 forwards + top 4 D by points
-    nhl-microstats cards McDavid Makar Hutson --out my_cards.html
-"""
+"""A player card's numbers: every stat's value and percentile, grouped into sections (categories), each
+category's percentile, and an overall rating. card_data() returns them as plain data for any front end to draw
+(pattullometrics draws them as its player cards)."""
 
 from __future__ import annotations
-
-import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -17,8 +12,6 @@ from . import collect, curves
 from .db import connect
 from .percentile import (MIN_TOI, REFERENCE, SEASON_RELATIVE, _defs, _seasons, complete_seasons, curve_for, pool,
                          season_name, season_table)
-
-TEMPLATE = Path(__file__).with_name("cards_template.html")
 
 # Stats shown on a card, by section. Stats not yet given a section sit under "" (no heading).
 SECTIONS = {
@@ -228,14 +221,3 @@ def _categories(m: dict, fitted: dict[str, curves.Curve]) -> list:
             pct = avg if len(ps) == 1 else fitted[title](avg)
             rows.append([title, round(avg, 1), len(ps), round(pct, 1)])
     return rows
-
-
-def write_cards(players=None, season="2025", out="cards.html", vs_season=REFERENCE) -> Path:
-    data = card_data(players or top_players(season), season, vs_season)
-    html = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
-    if len(data["cards"]) == 1:
-        html = html.replace("<title>NHL Microstat Cards</title>", f"<title>{data['cards'][0]['name']} Card</title>", 1)
-    out = Path(out)
-    out.write_text(html, encoding="utf-8")
-    print(f"Wrote {len(data['cards'])} cards to {out.resolve()}")
-    return out

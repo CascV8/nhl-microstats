@@ -1,7 +1,7 @@
 [project]
 name = "nhl-microstats"
 version = "0.1.0"
-description = "NHL skater microstats and league percentiles, built on puckscrape and xg-model"
+description = "NHL skater microstats, league percentiles and card numbers, built on puckscrape and xg-model"
 readme = "README.md"
 authors = [
     { name = "casc", email = "cruidadengv8@gmail.com" }
@@ -26,7 +26,7 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 puckscrape = { git = "https://github.com/CascV8/Puckscrape.git" }
-xg-model = { path = "../xg-model", editable = true }
+xg-model = { git = "https://github.com/CascV8/xG-model.git" }
 
 [dependency-groups]
 dev = [

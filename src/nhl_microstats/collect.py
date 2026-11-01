@@ -8,6 +8,7 @@ positions) and NHL Edge skater summaries. Everything resumes where it left off.
 from __future__ import annotations
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -19,8 +20,9 @@ from xg_model.collect import KEEP, game_ids
 
 log = logging.getLogger("nhl_microstats.collect")
 
-ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "data"
+# Everything downloaded and built lives in data/ under the folder it's run from (NHL_MICROSTATS_DATA to put it
+# elsewhere), so a site that installs this package keeps its data beside its own code.
+DATA = Path(os.environ["NHL_MICROSTATS_DATA"]) if os.environ.get("NHL_MICROSTATS_DATA") else Path.cwd() / "data"
 
 # player_id is the player credited with a takeaway or giveaway; blocking/hitting/hittee for blocks and hits;
 # committed_by/drawn_by, the penalty type (MIN, MAJ, MIS, ...) and its description for penalties.

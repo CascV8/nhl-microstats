@@ -9,23 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
+# downloads and the database (collect.DATA)
 data/
 collect.log
 .pytest_cache/
-
-# generated website
-site/
-# Pages Functions, copied from the NHLe repo at deploy (see update-site.yml)
-functions/
-site.tmp/
-site.old/
-# generated cards
-cards.html
-*_card.html
-
-# wrangler files
-.wrangler
-.dev.vars*
-!.dev.vars.example
-.env*
-!.env.example
